@@ -37,8 +37,13 @@ export class OcGoMcpClient {
     return visionModel.id;
   }
 
-  async analyzeImage(imageData: string, prompt: string): Promise<string> {
-    const apiKey = await this.getApiKey();
+  async analyzeImage(
+    imageData: string,
+    prompt: string,
+    signal?: AbortSignal,
+    apiKeyOverride?: string,
+  ): Promise<string> {
+    const apiKey = apiKeyOverride?.trim() || (await this.getApiKey());
     if (!apiKey) {
       throw new Error(`${PROVIDER_DISPLAY_NAME} API key not found`);
     }
@@ -65,6 +70,7 @@ export class OcGoMcpClient {
         ],
         max_tokens: 2000,
       }),
+      signal,
     });
 
     if (!response.ok) {
