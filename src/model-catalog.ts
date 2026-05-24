@@ -17,6 +17,18 @@ const NON_CHAT_MODEL_ID_PATTERNS = [
 ];
 
 const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
+  "meta/llama-3.1-8b-instruct": {
+    contextWindow: 128000,
+  },
+  "meta/llama-3.1-70b-instruct": {
+    contextWindow: 128000,
+  },
+  "deepseek-ai/deepseek-v4-flash": {
+    contextWindow: 1000000,
+  },
+  "deepseek-ai/deepseek-v4-pro": {
+    contextWindow: 1000000,
+  },
   "meta/llama-4-maverick-17b-128e-instruct": {
     displayName: "Llama 4 Maverick 17B 128E Instruct",
   },
@@ -49,6 +61,22 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "microsoft/phi-3.5-mini-instruct": {
     displayName: "Phi 3.5 Mini Instruct",
+  },
+  "microsoft/phi-4-mini-instruct": {
+    displayName: "Phi 4 Mini Instruct",
+    contextWindow: 128000,
+  },
+  "openai/gpt-oss-120b": {
+    displayName: "GPT OSS 120B",
+    contextWindow: 128000,
+  },
+  "moonshotai/kimi-k2.5": {
+    displayName: "Kimi K2.5",
+    contextWindow: 262144,
+  },
+  "moonshotai/kimi-k2.6": {
+    displayName: "Kimi K2.6",
+    contextWindow: 262144,
   },
   "01-ai/yi-large": {
     displayName: "Yi Large",
@@ -92,10 +120,37 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   "microsoft/phi-4": {
     displayName: "Phi 4",
   },
-  "microsoft/phi-4-mini-instruct": {
-    displayName: "Phi 4 Mini Instruct",
+  "z-ai/glm4.7": {
+    displayName: "GLM-4.7",
+    contextWindow: 204800,
+  },
+  "z-ai/glm5.1": {
+    displayName: "GLM-5.1",
+    contextWindow: 204800,
   },
 };
+
+export function rehydrateNormalizedNvidiaModel(model: NormalizedNvidiaModel): NormalizedNvidiaModel {
+  const override = KNOWN_MODEL_OVERRIDES[model.id];
+  if (!override) {
+    return model;
+  }
+
+  return {
+    ...model,
+    displayName: override.displayName ?? model.displayName,
+    contextWindow:
+      override.contextWindow !== undefined && model.contextWindow === DEFAULT_CONTEXT_WINDOW
+        ? override.contextWindow
+        : model.contextWindow,
+    maxOutputTokens:
+      override.maxOutputTokens !== undefined && model.maxOutputTokens === DEFAULT_MAX_OUTPUT_TOKENS
+        ? override.maxOutputTokens
+        : model.maxOutputTokens,
+    supportsTools: override.supportsTools ?? model.supportsTools,
+    supportsVision: override.supportsVision ?? model.supportsVision,
+  };
+}
 
 export function normalizeNvidiaModels(models: NvidiaModelSummary[]): NormalizedNvidiaModel[] {
   const seenIds = new Set<string>();

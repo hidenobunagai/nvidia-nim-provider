@@ -37,11 +37,64 @@ describe("normalizeNvidiaModels", () => {
       {
         id: "meta/llama-3.1-8b-instruct",
         displayName: "llama-3.1-8b-instruct",
-        contextWindow: 131072,
+        contextWindow: 128000,
         maxOutputTokens: 65536,
         supportsTools: true,
         supportsVision: false,
       },
+    ]);
+  });
+
+  it("uses model-card context windows for known NVIDIA overrides", () => {
+    const raw: NvidiaModelSummary[] = [
+      { id: "meta/llama-3.1-70b-instruct" },
+      { id: "deepseek-ai/deepseek-v4-flash" },
+      { id: "deepseek-ai/deepseek-v4-pro" },
+      { id: "moonshotai/kimi-k2.5" },
+      { id: "moonshotai/kimi-k2.6" },
+      { id: "z-ai/glm4.7" },
+      { id: "z-ai/glm5.1" },
+      { id: "microsoft/phi-4-mini-instruct" },
+      { id: "openai/gpt-oss-120b" },
+    ];
+
+    expect(normalizeNvidiaModels(raw)).toEqual([
+      expect.objectContaining({
+        id: "meta/llama-3.1-70b-instruct",
+        contextWindow: 128000,
+      }),
+      expect.objectContaining({
+        id: "deepseek-ai/deepseek-v4-flash",
+        contextWindow: 1000000,
+      }),
+      expect.objectContaining({
+        id: "deepseek-ai/deepseek-v4-pro",
+        contextWindow: 1000000,
+      }),
+      expect.objectContaining({
+        id: "moonshotai/kimi-k2.5",
+        contextWindow: 262144,
+      }),
+      expect.objectContaining({
+        id: "moonshotai/kimi-k2.6",
+        contextWindow: 262144,
+      }),
+      expect.objectContaining({
+        id: "z-ai/glm4.7",
+        contextWindow: 131072,
+      }),
+      expect.objectContaining({
+        id: "z-ai/glm5.1",
+        contextWindow: 131072,
+      }),
+      expect.objectContaining({
+        id: "microsoft/phi-4-mini-instruct",
+        contextWindow: 128000,
+      }),
+      expect.objectContaining({
+        id: "openai/gpt-oss-120b",
+        contextWindow: 128000,
+      }),
     ]);
   });
 
@@ -98,7 +151,8 @@ describe("normalizeNvidiaModels", () => {
     expect(normalizeNvidiaModels(raw)).toEqual([
       expect.objectContaining({
         id: "openai/gpt-oss-120b",
-        displayName: "gpt-oss-120b",
+        displayName: "GPT OSS 120B",
+        contextWindow: 128000,
       }),
     ]);
   });

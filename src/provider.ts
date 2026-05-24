@@ -43,6 +43,7 @@ import {
   isNormalizedNvidiaModel,
   NormalizedNvidiaModel,
   normalizeNvidiaModels,
+  rehydrateNormalizedNvidiaModel,
 } from "./model-catalog";
 import { getModelAdapter } from "./adapters";
 import { debugLog, outputLog } from "./output-channel";
@@ -189,7 +190,9 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
       return [];
     }
 
-    return storedModels.every(isNormalizedNvidiaModel) ? storedModels : [];
+    return storedModels.every(isNormalizedNvidiaModel)
+      ? storedModels.map(rehydrateNormalizedNvidiaModel)
+      : [];
   }
 
   private async getAvailableModels(

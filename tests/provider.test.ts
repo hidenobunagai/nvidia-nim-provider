@@ -176,7 +176,7 @@ describe("OcGoChatModelProvider", () => {
       {
         id: "meta/llama-3.1-8b-instruct",
         displayName: "llama-3.1-8b-instruct",
-        contextWindow: 131072,
+        contextWindow: 128000,
         maxOutputTokens: 65536,
         supportsTools: true,
         supportsVision: false,
