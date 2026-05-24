@@ -56,6 +56,32 @@
         }
       }
     ],
+    "languageModelTools": [
+      {
+        "name": "nvidia_nim_analyze_image",
+        "toolReferenceName": "analyzeImage",
+        "displayName": "NVIDIA NIM Analyze Image",
+        "modelDescription": "Analyze an image with the NVIDIA NIM vision model and return a text description.",
+        "userDescription": "Analyze an image using NVIDIA NIM Vision.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "image_data": {
+              "type": "string",
+              "description": "Base64-encoded image data URL."
+            },
+            "prompt": {
+              "type": "string",
+              "description": "Instruction describing what to analyze in the image."
+            }
+          },
+          "required": [
+            "image_data",
+            "prompt"
+          ]
+        }
+      }
+    ],
     "commands": [
       {
         "command": "nvidia-nim.manage",
