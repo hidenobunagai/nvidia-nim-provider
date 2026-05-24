@@ -1,5 +1,13 @@
 # Change Log
 
+## [0.2.1] - 2026-05-24
+
+### Added
+
+- Contributed `languageModelTools` configuration in `package.json` to properly declare the `nvidia_nim_analyze_image` tool for automatic discovery by VS Code Copilot Chat.
+- Robust API key dynamic synchronization that automatically saves credentials configured in model settings or provider groups to SecretStorage, preventing prompt loops.
+- Intelligent multi-tiered Vision fallbacks: automatic vision-capable model fallback switching, and asynchronous background OCR/description fallback (using the MCP image analysis client) for text-only models.
+
 ## [0.1.23] - 2026-04-27
 
 ### Changed
