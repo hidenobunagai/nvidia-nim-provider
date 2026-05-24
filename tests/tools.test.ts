@@ -42,7 +42,10 @@ describe("OcGoAnalyzeImageTool", () => {
       {
         input: { image_data: "data:image/png;base64,abc", prompt: "What is this?" },
       } as any,
-      { isCancellationRequested: false } as any,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })),
+      } as any,
     );
     expect((result.content[0] as any).value).toBe("Analyzed result");
   });
@@ -59,7 +62,10 @@ describe("OcGoAnalyzeImageTool", () => {
       {
         input: { image_data: "data:image/png;base64,abc", prompt: "What?" },
       } as any,
-      { isCancellationRequested: false } as any,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })),
+      } as any,
     );
     expect((result.content[0] as any).value).toContain("Failed to analyze image");
     expect((result.content[0] as any).value).toContain("API down");
@@ -68,7 +74,10 @@ describe("OcGoAnalyzeImageTool", () => {
   it("prepareInvocation returns invocation message", async () => {
     const prepared = await tool.prepareInvocation!(
       { input: { image_data: "", prompt: "" } } as any,
-      { isCancellationRequested: false } as any,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })),
+      } as any,
     );
     expect(prepared).toEqual({ invocationMessage: "Analyzing image with NVIDIA NIM Vision..." });
   });

@@ -214,7 +214,7 @@ describe("OcGoChatModelProvider", () => {
     );
 
     expect(fetchModels).toHaveBeenCalledWith("configured-key", undefined, "test-ua");
-    expect(secrets.get).not.toHaveBeenCalledWith("nvidia-nim.apiKey");
+    expect(secrets.store).toHaveBeenCalledWith("nvidia-nim.apiKey", "configured-key");
     expect(infos).toEqual([
       expect.objectContaining({
         id: "meta/llama-3.1-8b-instruct",
