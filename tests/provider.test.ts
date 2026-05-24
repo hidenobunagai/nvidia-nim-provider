@@ -854,8 +854,144 @@ describe("OcGoChatModelProvider", () => {
 
     expect(streamChatCompletion).not.toHaveBeenCalled();
     expect(progress.report).toHaveBeenCalledWith(
-      expect.objectContaining({ value: expect.stringContaining("does not support image input") }),
+      expect.objectContaining({ value: expect.stringContaining("does not support vision") }),
     );
+  });
+
+  it("automatically switches to a vision-capable fallback model when image input is provided to a non-vision model", async () => {
+    (secrets.get as jest.Mock).mockResolvedValue("test-key");
+    (globalState.get as jest.Mock).mockReturnValue([
+      {
+        id: "meta/llama-4-maverick-17b-128e-instruct",
+        displayName: "Llama 4 Maverick 17B 128E Instruct",
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsTools: true,
+        supportsVision: false,
+      },
+      {
+        id: "nvidia/vision-capable-fallback",
+        displayName: "NVIDIA Vision Fallback Model",
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsTools: true,
+        supportsVision: true,
+      },
+    ]);
+
+    const mockStream = async function* () {
+      yield { choices: [{ delta: { content: "Switched vision response" } }] };
+    };
+    (streamChatCompletion as jest.Mock).mockReturnValue(mockStream());
+
+    const progress = { report: jest.fn() };
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })),
+    };
+
+    await provider.provideLanguageModelChatResponse(
+      {
+        id: "meta/llama-4-maverick-17b-128e-instruct",
+        maxInputTokens: 100000,
+        maxOutputTokens: 16384,
+      } as any,
+      [
+        {
+          role: 1,
+          content: [
+            { value: "Identify this image" },
+            { mimeType: "image/png", data: new Uint8Array([1, 2, 3]) },
+          ],
+        },
+      ] as any,
+      { modelOptions: {} } as any,
+      progress,
+      token as any,
+    );
+
+    // Should inform the user about the model switch
+    expect(progress.report).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: expect.stringContaining("Switching to NVIDIA Vision Fallback Model for image analysis"),
+      }),
+    );
+
+    // Should call streamChatCompletion using the switched fallback model
+    expect(streamChatCompletion).toHaveBeenCalledWith(
+      "test-key",
+      expect.objectContaining({
+        model: "nvidia/vision-capable-fallback",
+      }),
+      expect.any(AbortSignal),
+      "test-ua",
+      { maxOutputTokens: 16384 },
+    );
+  });
+
+  it("performs background image analysis OCR fallback when no vision fallback model is in the catalog", async () => {
+    (secrets.get as jest.Mock).mockResolvedValue("test-key");
+    (globalState.get as jest.Mock).mockReturnValue([
+      {
+        id: "meta/llama-4-maverick-17b-128e-instruct",
+        displayName: "Llama 4 Maverick 17B 128E Instruct",
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsTools: true,
+        supportsVision: false,
+      },
+    ]);
+
+    // Mock mcpClient.analyzeImage
+    const analyzeImageSpy = jest
+      .spyOn((provider as any).mcpClient, "analyzeImage")
+      .mockResolvedValue("Mocked visual description of image contents");
+
+    const mockStream = async function* () {
+      yield { choices: [{ delta: { content: "Text model response" } }] };
+    };
+    (streamChatCompletion as jest.Mock).mockReturnValue(mockStream());
+
+    const progress = { report: jest.fn() };
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })),
+    };
+
+    await provider.provideLanguageModelChatResponse(
+      {
+        id: "meta/llama-4-maverick-17b-128e-instruct",
+        maxInputTokens: 100000,
+        maxOutputTokens: 16384,
+      } as any,
+      [
+        {
+          role: 1,
+          content: [
+            { value: "Describe the image" },
+            { mimeType: "image/png", data: new Uint8Array([1, 2, 3]) },
+          ],
+        },
+      ] as any,
+      { modelOptions: {} } as any,
+      progress,
+      token as any,
+    );
+
+    expect(analyzeImageSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/^data:image\/png;base64,/),
+      "Describe the image",
+      expect.any(AbortSignal),
+      "test-key",
+    );
+
+    // Should call streamChatCompletion using the text-only model with the injected description
+    const requestBody = (streamChatCompletion as jest.Mock).mock.calls.at(-1)[1];
+    expect(requestBody.model).toBe("meta/llama-4-maverick-17b-128e-instruct");
+    expect(requestBody.messages[0].content).toContain("[Image Analysis]");
+    expect(requestBody.messages[0].content).toContain("Mocked visual description of image contents");
+
+    analyzeImageSpy.mockRestore();
   });
 
   it("converts image parts to image_url content for vision-capable normalized models", async () => {
