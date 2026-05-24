@@ -45,6 +45,7 @@ import {
   normalizeNvidiaModels,
 } from "./model-catalog";
 import { getModelAdapter } from "./adapters";
+import { OcGoMcpClient } from "./mcp-compat";
 import { debugLog, outputLog } from "./output-channel";
 import { OcGoChatMessage, OcGoChatRequest } from "./types";
 import {
@@ -156,6 +157,7 @@ function buildMissingApiKeyFallback(): string {
 }
 
 export class OcGoChatModelProvider implements LanguageModelChatProvider {
+  private readonly mcpClient: OcGoMcpClient;
   private readonly runtimeInfoCache = new Map<
     string,
     {
@@ -176,11 +178,156 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     private readonly secrets: vscode.SecretStorage,
     private readonly userAgent: string,
     private readonly globalState?: vscode.Memento,
-  ) {}
+  ) {
+    this.mcpClient = new OcGoMcpClient(secrets, globalState);
+  }
 
   fireModelInfoChanged(): void {
     this.runtimeInfoCache.clear();
     this._onDidChangeLanguageModelChatInformation.fire();
+  }
+
+  private getConfiguredApiKeyState(configuration: unknown): {
+    hasApiKeyProperty: boolean;
+    apiKey?: string;
+  } {
+    if (!configuration || typeof configuration !== "object") {
+      return { hasApiKeyProperty: false };
+    }
+
+    const configurationRecord = configuration as { apiKey?: unknown };
+    if (!("apiKey" in configurationRecord)) {
+      return { hasApiKeyProperty: false };
+    }
+
+    const apiKey = configurationRecord.apiKey;
+    if (typeof apiKey !== "string") {
+      return { hasApiKeyProperty: true };
+    }
+
+    const normalizedApiKey = apiKey.trim();
+    return {
+      hasApiKeyProperty: true,
+      apiKey: normalizedApiKey || undefined,
+    };
+  }
+
+  private async syncConfiguredApiKey(options: unknown): Promise<string | undefined> {
+    if (!options || typeof options !== "object") {
+      return undefined;
+    }
+
+    const optionsRecord = options as { configuration?: unknown; modelConfiguration?: unknown };
+    const modelConfigurationState = this.getConfiguredApiKeyState(optionsRecord.modelConfiguration);
+    const providerConfigurationState = this.getConfiguredApiKeyState(optionsRecord.configuration);
+    const hasExplicitApiKeyProperty =
+      modelConfigurationState.hasApiKeyProperty || providerConfigurationState.hasApiKeyProperty;
+    if (!hasExplicitApiKeyProperty) {
+      return undefined;
+    }
+
+    const configuredApiKey = modelConfigurationState.apiKey ?? providerConfigurationState.apiKey;
+    const storedApiKey = await this.secrets.get(SECRET_STORAGE_KEY);
+    if (!configuredApiKey) {
+      if (storedApiKey !== undefined) {
+        await this.secrets.delete(SECRET_STORAGE_KEY);
+      }
+      return undefined;
+    }
+
+    if (storedApiKey !== configuredApiKey) {
+      await this.secrets.store(SECRET_STORAGE_KEY, configuredApiKey);
+    }
+
+    return configuredApiKey;
+  }
+
+  private modelSupportsVision(modelId: string): boolean {
+    const cachedModel = this.getNormalizedModels().find((entry) => entry.id === modelId);
+    return cachedModel?.supportsVision ?? false;
+  }
+
+  private getVisionFallbackModelId(): string | undefined {
+    const cachedModels = this.getNormalizedModels();
+    const visionModel = cachedModels.find((model) => model.supportsVision);
+    return visionModel?.id;
+  }
+
+  private async processImagesForNonVisionModel(
+    messages: readonly LanguageModelChatMessage[],
+    token: CancellationToken,
+    apiKey: string,
+  ): Promise<LanguageModelChatMessage[]> {
+    const processedMessages: LanguageModelChatMessage[] = [];
+
+    for (const msg of messages) {
+      const textParts: string[] = [];
+      for (const part of msg.content) {
+        if (part instanceof vscode.LanguageModelTextPart) {
+          textParts.push(part.value);
+        } else if (
+          typeof part === "object" &&
+          part !== null &&
+          "value" in part &&
+          typeof (part as { value?: unknown }).value === "string"
+        ) {
+          textParts.push((part as { value: string }).value);
+        }
+      }
+
+      const images: Array<{ mimeType: string; data: Uint8Array }> = [];
+      for (const part of msg.content) {
+        const p = part as { mimeType?: unknown; data?: unknown; bytes?: unknown; buffer?: unknown };
+        if (typeof p.mimeType !== "string" || !p.mimeType.startsWith("image/")) continue;
+        let data: Uint8Array | undefined;
+        if (p.data instanceof Uint8Array && p.data.length > 0) data = p.data;
+        else if (p.bytes instanceof Uint8Array && (p.bytes as Uint8Array).length > 0)
+          data = p.bytes as Uint8Array;
+        else if (Array.isArray(p.data) && p.data.length > 0)
+          data = new Uint8Array(p.data as number[]);
+        else if (Array.isArray(p.bytes) && (p.bytes as unknown[]).length > 0)
+          data = new Uint8Array(p.bytes as number[]);
+        if (data) images.push({ mimeType: p.mimeType, data });
+      }
+
+      if (images.length === 0) {
+        processedMessages.push(msg);
+        continue;
+      }
+
+      const userPrompt = textParts.join(" ");
+      const abortController = new AbortController();
+      const cancellationSubscription = token.onCancellationRequested(() => abortController.abort());
+
+      const descriptions = await Promise.all(
+        images.map(async (img) => {
+          if (token.isCancellationRequested) throw new vscode.CancellationError();
+          const base64Data = Buffer.from(img.data).toString("base64");
+          const imageDataUrl = `data:${img.mimeType};base64,${base64Data}`;
+          const analysisPrompt = userPrompt || "Describe this image in detail.";
+          return this.mcpClient.analyzeImage(
+            imageDataUrl,
+            analysisPrompt,
+            abortController.signal,
+            apiKey,
+          );
+        }),
+      ).finally(() => cancellationSubscription.dispose());
+
+      const newContent: vscode.LanguageModelTextPart[] = textParts.map(
+        (t) => new vscode.LanguageModelTextPart(t),
+      );
+      if (descriptions.length > 0) {
+        newContent.push(
+          new vscode.LanguageModelTextPart(
+            `\n\n[Image Analysis]:\n${descriptions.join("\n\n---\n\n")}`,
+          ),
+        );
+      }
+      processedMessages.push(vscode.LanguageModelChatMessage.User(newContent));
+    }
+
+    return processedMessages;
   }
 
   private getNormalizedModels(): NormalizedNvidiaModel[] {
@@ -334,6 +481,8 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
       return [];
     }
 
+    await this.syncConfiguredApiKey(options);
+
     const callNum = ++this._infoCallCounter;
     const groupName = getProviderGroupName(options);
     const hasProviderGroup = groupName !== undefined || hasProviderGroupConfiguration(options);
@@ -425,7 +574,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     });
 
     try {
-      const apiKey = await this.ensureApiKey(false, getApiKeyFromModel(model));
+      const apiKey = await this.ensureApiKey(options, false, getApiKeyFromModel(model));
       if (!apiKey) {
         progress.report(new vscode.LanguageModelTextPart(buildMissingApiKeyFallback()));
         return;
@@ -434,10 +583,63 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
       const requestPreparationStartedAtMs =
         process.env[DEBUG_ENV_VAR] === "1" ? Date.now() : undefined;
 
+      const hasImages = this.hasImageInput(messages);
+      let effectiveMessages = messages;
+      let effectiveModelId = model.id;
+      let effectiveModel = model;
+
+      let { supportsTools, supportsVision, contextWindow, runtimeMetadataSource } =
+        await this.resolveChatModelRuntimeInfo(model, apiKey);
+
+      if (hasImages && !supportsVision) {
+        const visionFallback = this.getVisionFallbackModelId();
+        if (visionFallback && visionFallback !== model.id) {
+          effectiveModelId = visionFallback;
+          const fallbackModel = this.getNormalizedModels().find((m) => m.id === visionFallback);
+          const currentModel = this.getNormalizedModels().find((m) => m.id === model.id);
+          const fallbackName = fallbackModel?.displayName ?? visionFallback;
+          const currentName = currentModel?.displayName ?? model.id;
+
+          progress.report(
+            new vscode.LanguageModelTextPart(
+              `Switching to ${fallbackName} for image analysis (${currentName} does not support vision).\n\n`,
+            ),
+          );
+
+          effectiveModel = {
+            ...model,
+            id: visionFallback,
+            name: fallbackName,
+          };
+          const resolved = await this.resolveChatModelRuntimeInfo(effectiveModel, apiKey);
+          supportsTools = resolved.supportsTools;
+          supportsVision = resolved.supportsVision;
+          contextWindow = resolved.contextWindow;
+          runtimeMetadataSource = resolved.runtimeMetadataSource;
+        } else {
+          try {
+            effectiveMessages = await this.processImagesForNonVisionModel(messages, token, apiKey);
+          } catch (err) {
+            if (err instanceof vscode.CancellationError || token.isCancellationRequested) {
+              throw err;
+            }
+            const message = err instanceof Error ? err.message : String(err);
+            const currentModel = this.getNormalizedModels().find((m) => m.id === model.id);
+            const currentName = currentModel?.displayName ?? model.id;
+            progress.report(
+              new vscode.LanguageModelTextPart(
+                `Image analysis failed: ${message}. The selected model (${currentName}) does not support vision and no vision fallback model is available. Please switch to a vision-capable model and try again.`,
+              ),
+            );
+            return;
+          }
+        }
+      }
+
       const inputTokenCount = estimateMessagesTokens(
-        messages as readonly { content: (vscode.LanguageModelInputPart | LegacyPart)[] }[],
+        effectiveMessages as readonly { content: (vscode.LanguageModelInputPart | LegacyPart)[] }[],
       );
-      const maxInputTokens = model.maxInputTokens;
+      const maxInputTokens = effectiveModel.maxInputTokens;
 
       // Apply safety margin to maxInputTokens to prevent context overflow
       const effectiveMaxInputTokens = Math.max(1, maxInputTokens - CONTEXT_WINDOW_SAFETY_MARGIN);
@@ -451,32 +653,20 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
         );
       }
 
-      const { supportsTools, supportsVision, contextWindow, runtimeMetadataSource } =
-        await this.resolveChatModelRuntimeInfo(model, apiKey);
       const maxTokensVal = (options.modelOptions as Record<string, unknown>)?.max_tokens;
       const requestedMaxTokens = this.calculateRequestedMaxTokens({
         requestedMaxTokens:
           typeof maxTokensVal === "number" && maxTokensVal > 0 ? maxTokensVal : DEFAULT_MAX_TOKENS,
-        modelMaxOutputTokens: model.maxOutputTokens,
+        modelMaxOutputTokens: effectiveModel.maxOutputTokens,
         contextWindow,
         inputTokenCount,
       });
-
-      const hasImages = this.hasImageInput(messages);
-      if (hasImages && !supportsVision) {
-        progress.report(
-          new vscode.LanguageModelTextPart(
-            "The selected NVIDIA NIM model does not support image input.",
-          ),
-        );
-        return;
-      }
 
       const maxToolResultChars = this.calculateMaxToolResultChars(contextWindow);
 
       const toolConfig = supportsTools ? convertTools(options) : {};
       const toolsEnabled = Boolean(toolConfig.tools?.length);
-      const adapter = getModelAdapter(model.id);
+      const adapter = getModelAdapter(effectiveModel.id);
       const requestProfile = adapter.getProfile({
         toolsEnabled,
       });
@@ -488,7 +678,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
       const temperatureVal =
         typeof userTemperature === "number" ? userTemperature : profileTemperature;
 
-      let apiMessages = convertMessages(messages, {
+      let apiMessages = convertMessages(effectiveMessages, {
         maxToolResultChars,
         supportsVision,
       });
@@ -505,7 +695,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
       }
 
       const requestBody: OcGoChatRequest = {
-        model: model.id,
+        model: effectiveModel.id,
         messages: apiMessages,
         stream: true,
         max_tokens: requestedMaxTokens,
@@ -550,11 +740,11 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
         const toolParsingStateStartedAtMs =
           process.env[DEBUG_ENV_VAR] === "1" ? Date.now() : undefined;
         const toolSchemas = getToolSchemaMap(options);
-        const requestContext = extractChatRequestContext(messages);
+        const requestContext = extractChatRequestContext(effectiveMessages);
         toolParsingState = {
           toolSchemas,
           requestContext,
-          emittedTextToolCallKeys: getCompletedToolCallKeys(messages, requestContext, toolSchemas),
+          emittedTextToolCallKeys: getCompletedToolCallKeys(effectiveMessages, requestContext, toolSchemas),
         };
         if (toolParsingStateStartedAtMs !== undefined) {
           toolParsingStateInitDurationMs = Date.now() - toolParsingStateStartedAtMs;
@@ -682,7 +872,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
           activeRequestBody,
           abortController.signal,
           this.userAgent,
-          { maxOutputTokens: model.maxOutputTokens },
+          { maxOutputTokens: effectiveModel.maxOutputTokens },
         )) {
           if (token.isCancellationRequested) {
             throw new vscode.CancellationError();
@@ -883,7 +1073,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
             ...(retryReasonHistory.length > 0
               ? { retryReasonHistory: [...retryReasonHistory] }
               : {}),
-            model: model.id,
+            model: effectiveModel.id,
             inputTokenCount,
             requestedMaxTokens,
             temperature: temperatureVal,
@@ -987,10 +1177,12 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
   }
 
   private async ensureApiKey(
+    options: unknown,
     silent: boolean,
     configuredApiKey?: string,
   ): Promise<string | undefined> {
-    let apiKey = configuredApiKey ?? (await this.secrets.get(SECRET_STORAGE_KEY));
+    const syncedApiKey = await this.syncConfiguredApiKey(options);
+    let apiKey = syncedApiKey ?? configuredApiKey ?? (await this.secrets.get(SECRET_STORAGE_KEY));
     if (!apiKey && !silent) {
       const configureAction = "Configure API Key";
       const result = await vscode.window.showInformationMessage(
