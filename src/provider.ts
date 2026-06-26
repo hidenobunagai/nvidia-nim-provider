@@ -12,22 +12,7 @@ import {
   Progress,
   ProvideLanguageModelChatResponseOptions,
 } from "vscode";
-import {
-  buildInvalidToolCallFallback,
-  buildInvalidToolCallRetryMessage,
-  buildToolCallCanonicalKey,
-  ChatRequestContext,
-  extractChatRequestContext,
-  getCompletedToolCallKeys,
-  getToolSchemaMap,
-  hasRequiredToolArguments,
-  isToolCallInput,
-  parseTextEmbeddedToolCalls,
-  repairToolArguments,
-  SkippedToolCall,
-  ToolSchema,
-} from "./tool-parser";
-import { fetchModels, streamChatCompletion } from "./api";
+import { fetchModels } from "./api";
 import {
   CONTEXT_WINDOW_SAFETY_MARGIN,
   DEBUG_ENV_VAR,
@@ -45,18 +30,11 @@ import {
   normalizeNvidiaModels,
 } from "./model-catalog";
 import { getModelAdapter } from "./adapters";
-import { OcGoMcpClient } from "./mcp-compat";
+import { NvidiaNimMcpClient } from "./mcp";
 import { debugLog, outputLog } from "./output-channel";
-import { OcGoChatMessage, OcGoChatRequest } from "./types";
-import {
-  convertMessages,
-  convertTools,
-  estimateMessagesTokens,
-  estimateTokens,
-  filterThinkTagsFromChunk,
-  flushThinkTagFilter,
-  LegacyPart,
-} from "./utils";
+import { estimateMessagesTokens, estimateTokens } from "./tokenizer";
+import { processOpenAIStream } from "./streaming/openai";
+import { LegacyPart } from "./message-parts";
 
 const DEFAULT_MAX_TOKENS = 65536;
 
@@ -156,8 +134,8 @@ function buildMissingApiKeyFallback(): string {
   return `${PROVIDER_DISPLAY_NAME} API key is not configured. Run "${PROVIDER_DISPLAY_NAME}: Manage ${PROVIDER_DISPLAY_NAME} API Key" from the Command Palette, or retry this request and enter the key when prompted.`;
 }
 
-export class OcGoChatModelProvider implements LanguageModelChatProvider {
-  private readonly mcpClient: OcGoMcpClient;
+export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
+  private readonly mcpClient: NvidiaNimMcpClient;
   private readonly runtimeInfoCache = new Map<
     string,
     {
@@ -179,7 +157,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     private readonly userAgent: string,
     private readonly globalState?: vscode.Memento,
   ) {
-    this.mcpClient = new OcGoMcpClient(secrets, globalState);
+    this.mcpClient = new NvidiaNimMcpClient(secrets, globalState);
   }
 
   fireModelInfoChanged(): void {
@@ -460,7 +438,6 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     );
   }
 
-  /** Return true if any message contains image input parts. */
   private hasImageInput(messages: readonly LanguageModelChatMessage[]): boolean {
     for (const msg of messages) {
       for (const part of msg.content) {
@@ -580,15 +557,12 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
         return;
       }
 
-      const requestPreparationStartedAtMs =
-        process.env[DEBUG_ENV_VAR] === "1" ? Date.now() : undefined;
-
       const hasImages = this.hasImageInput(messages);
       let effectiveMessages = messages;
       let effectiveModelId = model.id;
       let effectiveModel = model;
 
-      let { supportsTools, supportsVision, contextWindow, runtimeMetadataSource } =
+      let { supportsTools, supportsVision, contextWindow } =
         await this.resolveChatModelRuntimeInfo(model, apiKey);
 
       if (hasImages && !supportsVision) {
@@ -615,7 +589,6 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
           supportsTools = resolved.supportsTools;
           supportsVision = resolved.supportsVision;
           contextWindow = resolved.contextWindow;
-          runtimeMetadataSource = resolved.runtimeMetadataSource;
         } else {
           try {
             effectiveMessages = await this.processImagesForNonVisionModel(messages, token, apiKey);
@@ -664,11 +637,10 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
 
       const maxToolResultChars = this.calculateMaxToolResultChars(contextWindow);
 
-      const toolConfig = supportsTools ? convertTools(options) : {};
-      const toolsEnabled = Boolean(toolConfig.tools?.length);
-      const adapter = getModelAdapter(effectiveModel.id);
+      const toolsEnabled = Boolean(options.tools?.length);
+      const adapter = getModelAdapter(effectiveModelId);
       const requestProfile = adapter.getProfile({
-        toolsEnabled,
+        toolsEnabled: supportsTools && toolsEnabled,
       });
       const userTemperature = (options.modelOptions as Record<string, unknown>)?.temperature;
       const profileTemperature =
@@ -678,468 +650,20 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
       const temperatureVal =
         typeof userTemperature === "number" ? userTemperature : profileTemperature;
 
-      let apiMessages = convertMessages(effectiveMessages, {
+      await processOpenAIStream(
+        { id: effectiveModelId, maxOutputTokens: effectiveModel.maxOutputTokens },
+        effectiveMessages,
+        options,
+        apiKey,
+        requestedMaxTokens,
+        temperatureVal,
+        this.userAgent,
+        progress,
+        token,
+        abortController,
         maxToolResultChars,
         supportsVision,
-      });
-      apiMessages = adapter.applyMessagesWorkaround
-        ? adapter.applyMessagesWorkaround(apiMessages)
-        : apiMessages;
-      if (requestProfile.extraSystemMessages.length > 0) {
-        apiMessages = [
-          ...requestProfile.extraSystemMessages.map(
-            (content): OcGoChatMessage => ({ role: "system", content }),
-          ),
-          ...apiMessages,
-        ];
-      }
-
-      const requestBody: OcGoChatRequest = {
-        model: effectiveModel.id,
-        messages: apiMessages,
-        stream: true,
-        max_tokens: requestedMaxTokens,
-        temperature: temperatureVal,
-      };
-
-      const modelOpts = options.modelOptions as Record<string, unknown>;
-      if (typeof modelOpts?.top_p === "number") {
-        requestBody.top_p = Math.min(1, Math.max(0, modelOpts.top_p));
-      }
-      if (typeof modelOpts?.frequency_penalty === "number") {
-        requestBody.frequency_penalty = Math.min(2, Math.max(-2, modelOpts.frequency_penalty));
-      }
-      if (typeof modelOpts?.presence_penalty === "number") {
-        requestBody.presence_penalty = Math.min(2, Math.max(-2, modelOpts.presence_penalty));
-      }
-      const stopVal = modelOpts?.stop;
-      if (typeof stopVal === "string" || (Array.isArray(stopVal) && stopVal.length > 0)) {
-        requestBody.stop = stopVal as string | string[];
-      }
-
-      if (toolConfig.tools) {
-        requestBody.tools = toolConfig.tools;
-      }
-      if (toolConfig.tool_choice) {
-        requestBody.tool_choice = toolConfig.tool_choice;
-      }
-
-      debugLog("Outgoing request messages", requestBody.messages);
-
-      type ToolParsingState = {
-        toolSchemas: Map<string, ToolSchema>;
-        requestContext: ChatRequestContext | undefined;
-        emittedTextToolCallKeys: Set<string>;
-      };
-      let toolParsingState: ToolParsingState | undefined;
-      const getToolParsingState = (): ToolParsingState => {
-        if (toolParsingState) {
-          return toolParsingState;
-        }
-
-        const toolParsingStateStartedAtMs =
-          process.env[DEBUG_ENV_VAR] === "1" ? Date.now() : undefined;
-        const toolSchemas = getToolSchemaMap(options);
-        const requestContext = extractChatRequestContext(effectiveMessages);
-        toolParsingState = {
-          toolSchemas,
-          requestContext,
-          emittedTextToolCallKeys: getCompletedToolCallKeys(effectiveMessages, requestContext, toolSchemas),
-        };
-        if (toolParsingStateStartedAtMs !== undefined) {
-          toolParsingStateInitDurationMs = Date.now() - toolParsingStateStartedAtMs;
-        }
-        return toolParsingState;
-      };
-      let activeRequestBody = requestBody;
-      let deferredInvalidToolFallbackText: string | undefined;
-      let retryReason: "invalid_tool_call" | undefined;
-      const retryReasonHistory: string[] = [];
-      let totalAttempts = 0;
-      let requestPreparationDurationMs: number | undefined;
-      let toolParsingStateInitDurationMs: number | undefined;
-
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        totalAttempts += 1;
-        const attemptStartedAtMs = Date.now();
-        if (
-          requestPreparationDurationMs === undefined &&
-          requestPreparationStartedAtMs !== undefined
-        ) {
-          requestPreparationDurationMs = attemptStartedAtMs - requestPreparationStartedAtMs;
-        }
-        const toolCallBuffers = new Map<number, { id?: string; name?: string; args: string }>();
-        const completedToolCallIndices = new Set<number>();
-        const skippedToolCalls: SkippedToolCall[] = [];
-        const thinkTagFilterState = { insideThinkBlock: false, pendingText: "" };
-        let pendingTextEmbeddedContent = "";
-        let pendingText = "";
-        let sawToolCall = false;
-        let emittedToolCall = false;
-        let emittedFirstToolCall = false;
-        let reportedContent = false;
-        let firstResponseAtMs: number | undefined;
-        let firstToolCallAtMs: number | undefined;
-        let lastUsage:
-          | { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-          | undefined;
-        const markFirstResponse = (): void => {
-          if (firstResponseAtMs === undefined) {
-            firstResponseAtMs = Date.now();
-          }
-        };
-        const reportPart = (part: LanguageModelResponsePart): void => {
-          progress.report(part);
-          reportedContent = true;
-        };
-        const flushPendingText = (): void => {
-          if (!pendingText) {
-            return;
-          }
-          reportPart(new vscode.LanguageModelTextPart(pendingText));
-          pendingText = "";
-        };
-        const processFilteredText = (text: string): void => {
-          if (!text) {
-            return;
-          }
-
-          const { segments, incompleteText } = parseTextEmbeddedToolCalls(
-            pendingTextEmbeddedContent + text,
-          );
-          pendingTextEmbeddedContent = incompleteText;
-
-          for (const segment of segments) {
-            if (segment.type === "text") {
-              pendingText += segment.text;
-              continue;
-            }
-
-            if (segment.type === "invalidToolCall") {
-              sawToolCall = true;
-              const { toolSchemas } = getToolParsingState();
-              const schema = toolSchemas.get(segment.name);
-              skippedToolCalls.push({
-                name: segment.name,
-                required: schema?.required ?? [],
-              });
-              debugLog("Skipped invalid text tool call", { name: segment.name });
-              continue;
-            }
-
-            const toolCall = segment.toolCall;
-            sawToolCall = true;
-            const { emittedTextToolCallKeys, requestContext, toolSchemas } = getToolParsingState();
-            const schema = toolSchemas.get(toolCall.name);
-            const repairedArgs = repairToolArguments(
-              toolCall.name,
-              toolCall.args,
-              requestContext,
-              schema,
-            );
-            const canonicalKey = buildToolCallCanonicalKey(toolCall.name, repairedArgs);
-            if (emittedTextToolCallKeys.has(canonicalKey)) {
-              continue;
-            }
-
-            if (hasRequiredToolArguments(repairedArgs, schema)) {
-              flushPendingText();
-              reportPart(
-                new vscode.LanguageModelToolCallPart(
-                  `text_tool_${Math.random().toString(36).slice(2, 10)}`,
-                  toolCall.name,
-                  repairedArgs as Record<string, unknown>,
-                ),
-              );
-              emittedToolCall = true;
-              if (!emittedFirstToolCall) {
-                emittedFirstToolCall = true;
-                firstToolCallAtMs = Date.now();
-              }
-              emittedTextToolCallKeys.add(canonicalKey);
-            } else {
-              skippedToolCalls.push({
-                name: toolCall.name,
-                required: schema?.required ?? [],
-              });
-              debugLog("Skipped invalid text tool call", toolCall);
-            }
-          }
-        };
-
-        for await (const chunk of streamChatCompletion(
-          apiKey,
-          activeRequestBody,
-          abortController.signal,
-          this.userAgent,
-          { maxOutputTokens: effectiveModel.maxOutputTokens },
-        )) {
-          if (token.isCancellationRequested) {
-            throw new vscode.CancellationError();
-          }
-
-          const choice = chunk.choices?.[0];
-
-          if (chunk.usage) {
-            lastUsage = chunk.usage;
-          }
-
-          if (choice?.delta?.content) {
-            markFirstResponse();
-            processFilteredText(
-              filterThinkTagsFromChunk(choice.delta.content, thinkTagFilterState),
-            );
-          }
-
-          const reasoningContent = (choice?.delta as { reasoning_content?: string })
-            ?.reasoning_content;
-          if (reasoningContent) {
-            markFirstResponse();
-            const showReasoning = vscode.workspace
-              .getConfiguration("nvidia-nim")
-              .get<boolean>("showReasoning", false);
-            if (showReasoning) {
-              flushPendingText();
-              reportPart(
-                new vscode.LanguageModelTextPart(
-                  reasoningContent.startsWith(" ") ? reasoningContent : ` ${reasoningContent}`,
-                ),
-              );
-            }
-          }
-
-          // Handle tool calls
-          if (choice?.delta?.tool_calls) {
-            markFirstResponse();
-            sawToolCall = true;
-            for (const tc of choice.delta.tool_calls) {
-              const idx = (tc as { index?: number }).index ?? 0;
-              if (completedToolCallIndices.has(idx)) {
-                continue;
-              }
-
-              const buf = toolCallBuffers.get(idx) ?? { args: "" };
-              if (tc.id && typeof tc.id === "string") {
-                buf.id = tc.id;
-              }
-              const func = tc.function;
-              if (func?.name && typeof func.name === "string") {
-                buf.name = func.name;
-              }
-              if (typeof func?.arguments === "string") {
-                buf.args += func.arguments;
-              }
-              toolCallBuffers.set(idx, buf);
-
-              if (buf.args.trim().length === 0) {
-                continue;
-              }
-
-              // Emit immediately once arguments become valid JSON
-              try {
-                const { emittedTextToolCallKeys, requestContext, toolSchemas } =
-                  getToolParsingState();
-                const schema = toolSchemas.get(buf.name ?? "");
-                const args = repairToolArguments(
-                  buf.name ?? "",
-                  buf.args ? JSON.parse(buf.args) : {},
-                  requestContext,
-                  schema,
-                );
-                if (
-                  buf.id &&
-                  buf.name &&
-                  isToolCallInput(args) &&
-                  hasRequiredToolArguments(args, schema)
-                ) {
-                  const canonicalKey = buildToolCallCanonicalKey(buf.name, args);
-                  if (emittedTextToolCallKeys.has(canonicalKey)) {
-                    completedToolCallIndices.add(idx);
-                    toolCallBuffers.delete(idx);
-                    continue;
-                  }
-                  flushPendingText();
-                  reportPart(new vscode.LanguageModelToolCallPart(buf.id, buf.name, args));
-                  emittedToolCall = true;
-                  if (!emittedFirstToolCall) {
-                    emittedFirstToolCall = true;
-                    firstToolCallAtMs = Date.now();
-                  }
-                  emittedTextToolCallKeys.add(canonicalKey);
-                  completedToolCallIndices.add(idx);
-                  toolCallBuffers.delete(idx);
-                } else if (buf.id && buf.name) {
-                  skippedToolCalls.push({
-                    name: buf.name,
-                    required: schema?.required ?? [],
-                  });
-                  debugLog("Skipped invalid tool call", { id: buf.id, name: buf.name, args });
-                  completedToolCallIndices.add(idx);
-                  toolCallBuffers.delete(idx);
-                }
-              } catch {
-                // JSON incomplete — wait for next chunk
-              }
-            }
-          }
-        }
-
-        processFilteredText(flushThinkTagFilter(thinkTagFilterState));
-
-        // Flush any remaining buffered tool calls at stream end
-        for (const [idx, buf] of Array.from(toolCallBuffers.entries())) {
-          if (completedToolCallIndices.has(idx)) {
-            continue;
-          }
-          try {
-            const { emittedTextToolCallKeys, requestContext, toolSchemas } = getToolParsingState();
-            const schema = toolSchemas.get(buf.name ?? "");
-            const args = repairToolArguments(
-              buf.name ?? "",
-              buf.args ? JSON.parse(buf.args) : {},
-              requestContext,
-              schema,
-            );
-            if (
-              buf.id &&
-              buf.name &&
-              isToolCallInput(args) &&
-              hasRequiredToolArguments(args, schema)
-            ) {
-              const canonicalKey = buildToolCallCanonicalKey(buf.name, args);
-              if (emittedTextToolCallKeys.has(canonicalKey)) {
-                continue;
-              }
-              flushPendingText();
-              reportPart(new vscode.LanguageModelToolCallPart(buf.id, buf.name, args));
-              emittedToolCall = true;
-              if (!emittedFirstToolCall) {
-                emittedFirstToolCall = true;
-                firstToolCallAtMs = Date.now();
-              }
-              emittedTextToolCallKeys.add(canonicalKey);
-            } else if (buf.id && buf.name) {
-              skippedToolCalls.push({
-                name: buf.name,
-                required: schema?.required ?? [],
-              });
-              debugLog("Skipped invalid tool call at stream end", {
-                id: buf.id,
-                name: buf.name,
-                args,
-              });
-            }
-          } catch {
-            // Ignore incomplete JSON at stream end
-          }
-        }
-
-        if (pendingText && (!sawToolCall || emittedToolCall || pendingText.trim().length > 0)) {
-          flushPendingText();
-        }
-
-        const fallbackText = sawToolCall
-          ? buildInvalidToolCallFallback(skippedToolCalls)
-          : undefined;
-        const retryMessage = sawToolCall
-          ? buildInvalidToolCallRetryMessage(skippedToolCalls)
-          : undefined;
-        const willRetryAfterInvalidToolCall =
-          sawToolCall &&
-          !emittedToolCall &&
-          attempt === 0 &&
-          !reportedContent &&
-          Boolean(fallbackText && retryMessage);
-        const currentRetryReason =
-          retryReason ?? (willRetryAfterInvalidToolCall ? "invalid_tool_call" : undefined);
-        const skippedToolCallNames = Array.from(new Set(skippedToolCalls.map((call) => call.name)));
-
-        if (firstResponseAtMs !== undefined) {
-          const totalDurationMs = Date.now() - attemptStartedAtMs;
-          const generationDurationMs = Math.max(
-            0,
-            totalDurationMs - (firstResponseAtMs - attemptStartedAtMs),
-          );
-          const promptTokens = lastUsage?.prompt_tokens;
-          const completionTokens = lastUsage?.completion_tokens;
-          const totalTokens = lastUsage?.total_tokens;
-          debugLog("stream timing", {
-            attempt: attempt + 1,
-            totalAttempts,
-            ...(requestPreparationDurationMs !== undefined ? { requestPreparationDurationMs } : {}),
-            ...(toolParsingStateInitDurationMs !== undefined
-              ? { toolParsingStateInitDurationMs }
-              : {}),
-            ...(retryReasonHistory.length > 0
-              ? { retryReasonHistory: [...retryReasonHistory] }
-              : {}),
-            model: effectiveModel.id,
-            inputTokenCount,
-            requestedMaxTokens,
-            temperature: temperatureVal,
-            toolsEnabled,
-            runtimeMetadataSource,
-            isRetryAttempt: attempt > 0,
-            willRetryAfterInvalidToolCall,
-            skippedToolCallCount: skippedToolCalls.length,
-            ...(skippedToolCallNames.length > 0 ? { skippedToolCallNames } : {}),
-            ...(currentRetryReason ? { retryReason: currentRetryReason } : {}),
-            firstTokenLatencyMs: firstResponseAtMs - attemptStartedAtMs,
-            ...(firstToolCallAtMs !== undefined
-              ? { firstToolCallLatencyMs: firstToolCallAtMs - attemptStartedAtMs }
-              : {}),
-            totalDurationMs,
-            generationDurationMs,
-            ...(promptTokens !== undefined ? { promptTokens } : {}),
-            ...(completionTokens !== undefined ? { completionTokens } : {}),
-            ...(totalTokens !== undefined ? { totalTokens } : {}),
-            ...(completionTokens !== undefined && generationDurationMs > 0
-              ? {
-                  completionTokensPerSecond: Number(
-                    (completionTokens / (generationDurationMs / 1000)).toFixed(2),
-                  ),
-                }
-              : {}),
-            reportedContent,
-            emittedToolCall,
-          });
-        }
-
-        if (lastUsage) {
-          debugLog("stream usage", lastUsage);
-        }
-
-        if (sawToolCall && !emittedToolCall) {
-          if (attempt === 0 && !reportedContent && fallbackText && retryMessage) {
-            deferredInvalidToolFallbackText = fallbackText;
-            retryReason = "invalid_tool_call";
-            retryReasonHistory.push("invalid_tool_call");
-            activeRequestBody = {
-              ...activeRequestBody,
-              messages: [
-                ...activeRequestBody.messages,
-                {
-                  role: "system",
-                  content: retryMessage,
-                },
-              ],
-            };
-            continue;
-          }
-          if (fallbackText) {
-            reportPart(new vscode.LanguageModelTextPart(fallbackText));
-          }
-        }
-
-        if (reportedContent || emittedToolCall) {
-          deferredInvalidToolFallbackText = undefined;
-        }
-        break;
-      }
-
-      if (deferredInvalidToolFallbackText) {
-        progress.report(new vscode.LanguageModelTextPart(deferredInvalidToolFallbackText));
-      }
+      );
     } catch (err) {
       if (token.isCancellationRequested || (err instanceof Error && err.name === "AbortError")) {
         throw new vscode.CancellationError();
@@ -1212,3 +736,4 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     return apiKey;
   }
 }
+export { NvidiaNimChatModelProvider as OcGoChatModelProvider }; // Kept for transition safety during refactoring
