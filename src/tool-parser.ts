@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { LanguageModelChatMessage, ProvideLanguageModelChatResponseOptions } from "vscode";
 
 function safeJsonParse(text: string): unknown {
   if (!text) return {};
@@ -12,16 +11,6 @@ function safeJsonParse(text: string): unknown {
     // ignore
   }
   throw new Error("Failed to parse JSON");
-}
-
-export interface ToolSchema {
-  required?: string[];
-  enumValues?: Record<string, string[]>;
-}
-
-export interface SkippedToolCall {
-  name: string;
-  required: string[];
 }
 
 export interface ParsedTextToolCall {
@@ -54,169 +43,11 @@ export interface ParsedTextToolCallResult {
   incompleteText: string;
 }
 
-export interface ChatRequestContext {
-  filePath?: string;
-  startLine?: number;
-  endLine?: number;
-  cwd?: string;
-}
-
-export function buildToolCallCanonicalKey(name: string, args: unknown): string {
-  return `${name}:${JSON.stringify(args)}`;
-}
-
-export function getCompletedToolCallKeys(
-  messages: readonly LanguageModelChatMessage[],
-  requestContext: ChatRequestContext | undefined,
-  toolSchemas: ReadonlyMap<string, ToolSchema>,
-): Set<string> {
-  let startIndex = 0;
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    if (message.role !== vscode.LanguageModelChatMessageRole.User) {
-      continue;
-    }
-
-    const hasNonToolResultContent = message.content.some((part) => {
-      const toolResultPart = part as { callId?: unknown; content?: unknown[] };
-      return !(typeof toolResultPart.callId === "string" && Array.isArray(toolResultPart.content));
-    });
-    if (hasNonToolResultContent) {
-      startIndex = i + 1;
-      break;
-    }
-  }
-
-  const completedCallIds = new Set<string>();
-
-  for (const message of messages.slice(startIndex)) {
-    for (const part of message.content) {
-      const toolResultPart = part as { callId?: unknown; content?: unknown[] };
-      if (typeof toolResultPart.callId === "string" && Array.isArray(toolResultPart.content)) {
-        completedCallIds.add(toolResultPart.callId);
-      }
-    }
-  }
-
-  const keys = new Set<string>();
-  for (const message of messages.slice(startIndex)) {
-    for (const part of message.content) {
-      const toolCallPart = part as { callId?: unknown; name?: unknown; input?: unknown };
-      if (
-        typeof toolCallPart.callId !== "string" ||
-        !completedCallIds.has(toolCallPart.callId) ||
-        typeof toolCallPart.name !== "string"
-      ) {
-        continue;
-      }
-
-      const repairedArgs = repairToolArguments(
-        toolCallPart.name,
-        toolCallPart.input ?? {},
-        requestContext,
-        toolSchemas.get(toolCallPart.name),
-      );
-      keys.add(buildToolCallCanonicalKey(toolCallPart.name, repairedArgs));
-    }
-  }
-
-  return keys;
-}
-
-export function getToolSchemaMap(
-  options: ProvideLanguageModelChatResponseOptions,
-): Map<string, ToolSchema> {
-  const map = new Map<string, ToolSchema>();
-  for (const tool of options.tools ?? []) {
-    const inputSchema = tool.inputSchema as
-      | { required?: unknown; properties?: unknown }
-      | undefined;
-    const required = Array.isArray(inputSchema?.required)
-      ? inputSchema.required.filter(
-          (value): value is string => typeof value === "string" && value.length > 0,
-        )
-      : undefined;
-    const enumValues: Record<string, string[]> = {};
-    const properties =
-      typeof inputSchema?.properties === "object" && inputSchema.properties !== null
-        ? (inputSchema.properties as Record<string, unknown>)
-        : {};
-    for (const [name, value] of Object.entries(properties)) {
-      const propertySchema =
-        typeof value === "object" && value !== null && !Array.isArray(value)
-          ? (value as { enum?: unknown })
-          : undefined;
-      if (Array.isArray(propertySchema?.enum)) {
-        const allowed = propertySchema.enum.filter(
-          (item): item is string => typeof item === "string",
-        );
-        if (allowed.length > 0) {
-          enumValues[name] = allowed;
-        }
-      }
-    }
-    map.set(tool.name, { required, enumValues });
-  }
-  return map;
-}
-
-export function hasRequiredToolArguments(args: unknown, schema: ToolSchema | undefined): boolean {
-  const required = schema?.required ?? [];
-  if (required.length === 0) {
-    return true;
-  }
-  if (typeof args !== "object" || args === null || Array.isArray(args)) {
-    return false;
-  }
-  const record = args as Record<string, unknown>;
-  return required.every(
-    (key) =>
-      key in record && record[key] !== undefined && record[key] !== null && record[key] !== "",
-  );
-}
-
-export function buildInvalidToolCallFallback(
-  skippedToolCalls: readonly SkippedToolCall[],
-): string | undefined {
-  const skippedWithRequiredArgs = skippedToolCalls.find((toolCall) => toolCall.required.length > 0);
-  if (skippedWithRequiredArgs) {
-    const requiredArgs = skippedWithRequiredArgs.required.map((arg) => `\`${arg}\``).join(", ");
-    return `Tool call \`${skippedWithRequiredArgs.name}\` was rejected: missing ${requiredArgs}. Retry with all required fields filled.`;
-  }
-
-  const firstSkippedToolCall = skippedToolCalls[0];
-  if (!firstSkippedToolCall) {
-    return undefined;
-  }
-
-  return `Tool call \`${firstSkippedToolCall.name}\` had invalid arguments. Retry with a valid JSON object.`;
-}
-
-export function buildInvalidToolCallRetryMessage(
-  skippedToolCalls: readonly SkippedToolCall[],
-): string | undefined {
-  const skippedWithRequiredArgs = skippedToolCalls.find((toolCall) => toolCall.required.length > 0);
-  if (skippedWithRequiredArgs) {
-    const requiredList = skippedWithRequiredArgs.required.join(", ");
-    return [
-      `Your previous tool call "${skippedWithRequiredArgs.name}" was rejected because it was missing required arguments: ${requiredList}.`,
-      `Retry NOW. Provide a valid JSON object containing ALL of: ${requiredList}.`,
-      "Do not call any tool with an empty object or missing fields.",
-      "Do not ask the user to retry. Do not explain the error.",
-    ].join(" ");
-  }
-
-  const firstSkippedToolCall = skippedToolCalls[0];
-  if (!firstSkippedToolCall) {
-    return undefined;
-  }
-
-  return [
-    `Your previous tool call "${firstSkippedToolCall.name}" was rejected due to invalid or incomplete arguments.`,
-    "Retry NOW with a complete, valid JSON object.",
-    "Do not emit malformed JSON or empty arguments.",
-    "Do not ask the user to retry. Do not explain what went wrong.",
-  ].join(" ");
+export interface ParsedXmlStyleToolCallResult {
+  consumed: number;
+  incomplete: boolean;
+  rawText?: string;
+  toolCall?: ParsedTextToolCall;
 }
 
 export function findTrailingTokenPrefixStart(text: string, token: string): number {
@@ -226,21 +57,91 @@ export function findTrailingTokenPrefixStart(text: string, token: string): numbe
       return text.length - prefixLength;
     }
   }
-
   return -1;
 }
 
 export function findTrailingTokenPrefixStartAny(text: string, tokens: readonly string[]): number {
   let bestMatch = -1;
-
   for (const token of tokens) {
     const matchIndex = findTrailingTokenPrefixStart(text, token);
     if (matchIndex !== -1 && (bestMatch === -1 || matchIndex < bestMatch)) {
       bestMatch = matchIndex;
     }
   }
-
   return bestMatch;
+}
+
+function parseEmbeddedToolParameterValue(rawValue: string): unknown {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return "";
+  if (
+    /^[\[{\"]/.test(trimmed) ||
+    /^(?:true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)$/.test(trimmed)
+  ) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {}
+  }
+  return trimmed;
+}
+
+export function parseXmlStyleToolCall(text: string): ParsedXmlStyleToolCallResult {
+  const toolCallsStartToken = "<tool_calls>";
+  const toolCallStartToken = "<tool_call ";
+  const toolCallEndToken = "</tool_call>";
+  const toolCallsEndPattern = /^\s*<\/tool_calls>/;
+
+  let cursor = 0;
+  let wrapped = false;
+
+  if (text.startsWith(toolCallsStartToken)) {
+    wrapped = true;
+    cursor = toolCallsStartToken.length;
+    while (cursor < text.length && /\s/.test(text[cursor])) {
+      cursor += 1;
+    }
+  }
+
+  if (!text.startsWith(toolCallStartToken, cursor)) {
+    return { consumed: 0, incomplete: true };
+  }
+
+  const openTagEnd = text.indexOf(">", cursor);
+  if (openTagEnd === -1) {
+    return { consumed: 0, incomplete: true };
+  }
+
+  const openTag = text.slice(cursor, openTagEnd + 1);
+  const closeTagIndex = text.indexOf(toolCallEndToken, openTagEnd + 1);
+  if (closeTagIndex === -1) {
+    return { consumed: 0, incomplete: true };
+  }
+
+  let consumed = closeTagIndex + toolCallEndToken.length;
+  if (wrapped) {
+    const wrapperCloseMatch = text.slice(consumed).match(toolCallsEndPattern);
+    if (!wrapperCloseMatch) {
+      return { consumed: 0, incomplete: true };
+    }
+    consumed += wrapperCloseMatch[0].length;
+  }
+
+  const toolName = openTag.match(/\bname\s*=\s*"([^"]+)"/)?.[1]?.trim();
+  if (!toolName) {
+    return { consumed, incomplete: false, rawText: text.slice(0, consumed) };
+  }
+
+  const innerContent = text.slice(openTagEnd + 1, closeTagIndex);
+  const args: Record<string, unknown> = {};
+  const parameterPattern = /<tool_parameter\s+name="([^"]+)">([\s\S]*?)<\/tool_parameter>/g;
+  let parameterMatch: RegExpExecArray | null;
+  while ((parameterMatch = parameterPattern.exec(innerContent)) !== null) {
+    const parameterName = parameterMatch[1]?.trim();
+    if (!parameterName) continue;
+    args[parameterName] = parseEmbeddedToolParameterValue(parameterMatch[2] ?? "");
+  }
+
+  return { consumed, incomplete: false, toolCall: { name: toolName, args } };
 }
 
 export function unwrapJsonCodeFence(text: string): string {
@@ -307,6 +208,8 @@ export function parseTextEmbeddedToolCalls(text: string): ParsedTextToolCallResu
     asciiDsmlToken,
   ] as const;
 
+  const xmlStartTokens = ["<tool_calls>", "<tool_call "] as const;
+
   const segments: ParsedTextSegment[] = [];
   let remaining = text;
   let incompleteText = "";
@@ -326,39 +229,47 @@ export function parseTextEmbeddedToolCalls(text: string): ParsedTextToolCallResu
 
   while (remaining.length > 0) {
     const tokenMatches = [
-      { kind: "openai", token: beginToken, index: remaining.indexOf(beginToken) },
+      { kind: "openai" as const, token: beginToken, index: remaining.indexOf(beginToken) },
       {
-        kind: "strip",
+        kind: "strip" as const,
         token: deepSeekCallsBeginToken,
         index: remaining.indexOf(deepSeekCallsBeginToken),
       },
       {
-        kind: "deepseek",
+        kind: "deepseek" as const,
         token: deepSeekCallBeginToken,
         index: remaining.indexOf(deepSeekCallBeginToken),
       },
       {
-        kind: "strip",
+        kind: "strip" as const,
         token: deepSeekCallsEndToken,
         index: remaining.indexOf(deepSeekCallsEndToken),
       },
       {
-        kind: "control",
+        kind: "control" as const,
         token: unicodeDsmlToken,
         index: remaining.indexOf(unicodeDsmlToken),
       },
       {
-        kind: "control",
+        kind: "control" as const,
         token: asciiDsmlToken,
         index: remaining.indexOf(asciiDsmlToken),
       },
+      ...xmlStartTokens.map((token) => ({
+        kind: "xml" as const,
+        token,
+        index: remaining.indexOf(token),
+      })),
     ].filter((match) => match.index !== -1);
 
     tokenMatches.sort((left, right) => left.index - right.index);
     const nextTokenMatch = tokenMatches[0];
 
     if (!nextTokenMatch) {
-      const partialBeginIndex = findTrailingTokenPrefixStartAny(remaining, partialTokens);
+      const partialBeginIndex = findTrailingTokenPrefixStartAny(remaining, [
+        ...partialTokens,
+        ...xmlStartTokens,
+      ]);
       if (partialBeginIndex === -1) {
         appendText(remaining);
       } else {
@@ -372,6 +283,22 @@ export function parseTextEmbeddedToolCalls(text: string): ParsedTextToolCallResu
     remaining = remaining.slice(nextTokenMatch.index + nextTokenMatch.token.length);
 
     if (nextTokenMatch.kind === "strip") {
+      continue;
+    }
+
+    if (nextTokenMatch.kind === "xml") {
+      // Re-prepend token length because parseXmlStyleToolCall expects to scan it
+      const xmlToolCall = parseXmlStyleToolCall(nextTokenMatch.token + remaining);
+      if (xmlToolCall.incomplete) {
+        incompleteText = nextTokenMatch.token + remaining;
+        break;
+      }
+      remaining = remaining.slice(xmlToolCall.consumed - nextTokenMatch.token.length);
+      if (xmlToolCall.rawText) {
+        appendText(xmlToolCall.rawText);
+      } else if (xmlToolCall.toolCall) {
+        segments.push({ type: "toolCall", toolCall: xmlToolCall.toolCall });
+      }
       continue;
     }
 
@@ -446,148 +373,22 @@ export function parseTextEmbeddedToolCalls(text: string): ParsedTextToolCallResu
   return { segments, incompleteText };
 }
 
-export function extractChatRequestContext(
-  messages: readonly LanguageModelChatMessage[],
-): ChatRequestContext | undefined {
-  const filePattern = /The user's current file is\s+([^\n]+?)\.(?:\s|$)/;
-  const selectionPattern = /The current selection is from line\s+(\d+)\s+to line\s+(\d+)/;
-  const cwdPattern = /(?:^|\n)Cwd:\s+([^\n]+)/;
-  const context: ChatRequestContext = {};
+/**
+ * Stateful scanner for streaming text-embedded tool calls.
+ */
+export class ToolCallScanner {
+  buffer = "";
 
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    for (const part of message.content) {
-      const text =
-        part instanceof vscode.LanguageModelTextPart
-          ? part.value
-          : typeof part === "object" &&
-              part !== null &&
-              "value" in part &&
-              typeof (part as { value?: unknown }).value === "string"
-            ? (part as { value: string }).value
-            : undefined;
-
-      if (!text) {
-        continue;
-      }
-
-      const fileMatch = text.match(filePattern);
-      const selectionMatch = text.match(selectionPattern);
-      const cwdMatch = text.match(cwdPattern);
-
-      if (fileMatch && !context.filePath) {
-        context.filePath = fileMatch[1].trim();
-      }
-      if (cwdMatch && !context.cwd) {
-        context.cwd = cwdMatch[1].trim();
-      }
-      if (selectionMatch && context.startLine === undefined && context.endLine === undefined) {
-        const startLine = Number(selectionMatch[1]);
-        const endLine = Number(selectionMatch[2]);
-        if (Number.isFinite(startLine) && Number.isFinite(endLine)) {
-          context.startLine = startLine;
-          context.endLine = endLine;
-        }
-      }
-
-      if (
-        context.filePath &&
-        context.cwd &&
-        context.startLine !== undefined &&
-        context.endLine !== undefined
-      ) {
-        break;
-      }
-    }
+  feed(text: string): ParsedTextSegment[] {
+    this.buffer += text;
+    const { segments, incompleteText } = parseTextEmbeddedToolCalls(this.buffer);
+    this.buffer = incompleteText;
+    return segments;
   }
 
-  return context.filePath ||
-    context.cwd ||
-    context.startLine !== undefined ||
-    context.endLine !== undefined
-    ? context
-    : undefined;
-}
-
-export function repairToolArguments(
-  toolName: string,
-  args: unknown,
-  requestContext: ChatRequestContext | undefined,
-  schema?: ToolSchema,
-): unknown {
-  if (typeof args !== "object" || args === null || Array.isArray(args)) {
-    return args;
+  flushText(): string {
+    const text = this.buffer;
+    this.buffer = "";
+    return text;
   }
-
-  const record = args as Record<string, unknown>;
-  const required = new Set(schema?.required ?? []);
-  const needsStringField = (value: unknown, field: string): boolean =>
-    required.has(field) && (typeof value !== "string" || value.trim().length === 0);
-  const needsNumberField = (value: unknown, field: string): boolean =>
-    required.has(field) && typeof value !== "number";
-
-  const repaired: Record<string, unknown> = { ...record };
-
-  if (schema?.required) {
-    for (const key of schema.required) {
-      const val = repaired[key];
-      if (typeof val === "string") {
-        const lower = val.toLowerCase().trim();
-        if (lower === "true" || lower === "yes" || lower === "1") {
-          repaired[key] = true;
-        } else if (lower === "false" || lower === "no" || lower === "0") {
-          repaired[key] = false;
-        }
-      }
-    }
-  }
-
-  if (
-    repaired.arguments &&
-    typeof repaired.arguments === "object" &&
-    !Array.isArray(repaired.arguments)
-  ) {
-    const inner = repaired.arguments as Record<string, unknown>;
-    const outerRequiredKeys = schema?.required ?? [];
-    const hasRequiredInInner = outerRequiredKeys.every((k) => k in inner);
-    if (hasRequiredInInner && outerRequiredKeys.length > 0) {
-      for (const key of outerRequiredKeys) {
-        if (!(key in repaired) && key in inner) {
-          repaired[key] = inner[key];
-        }
-      }
-      delete repaired.arguments;
-    }
-  }
-
-  const context = requestContext;
-  if (!context) {
-    return repaired;
-  }
-
-  if (toolName === "read_file") {
-    return {
-      ...repaired,
-      ...(needsStringField(repaired.filePath, "filePath") && context.filePath
-        ? { filePath: context.filePath }
-        : {}),
-      ...(needsNumberField(repaired.startLine, "startLine")
-        ? { startLine: context.startLine ?? 1 }
-        : {}),
-      ...(needsNumberField(repaired.endLine, "endLine") ? { endLine: context.endLine ?? 200 } : {}),
-    };
-  }
-
-  if (toolName === "list_dir") {
-    return {
-      ...repaired,
-      ...(needsStringField(repaired.path, "path") && context.cwd ? { path: context.cwd } : {}),
-    };
-  }
-
-  return repaired;
-}
-
-export function isToolCallInput(args: unknown): args is Record<string, unknown> {
-  return typeof args === "object" && args !== null && !Array.isArray(args);
 }
