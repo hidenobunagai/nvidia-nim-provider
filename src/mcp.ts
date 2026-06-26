@@ -12,13 +12,17 @@ import { isNormalizedNvidiaModel } from "./model-catalog";
 /**
  * Image-analysis client that uses a cached NVIDIA NIM vision-capable model.
  */
-export class OcGoMcpClient {
+export class NvidiaNimMcpClient {
   constructor(
     private readonly secrets: vscode.SecretStorage,
     private readonly modelStorage?: vscode.Memento,
   ) {}
 
-  private async getApiKey(): Promise<string> {
+  private async getApiKey(apiKeyOverride?: string): Promise<string> {
+    const normalizedApiKey = apiKeyOverride?.trim();
+    if (normalizedApiKey) {
+      return normalizedApiKey;
+    }
     return (await this.secrets.get(SECRET_STORAGE_KEY)) ?? "";
   }
 
@@ -43,7 +47,7 @@ export class OcGoMcpClient {
     signal?: AbortSignal,
     apiKeyOverride?: string,
   ): Promise<string> {
-    const apiKey = apiKeyOverride?.trim() || (await this.getApiKey());
+    const apiKey = await this.getApiKey(apiKeyOverride);
     if (!apiKey) {
       throw new Error(`${PROVIDER_DISPLAY_NAME} API key not found`);
     }
@@ -85,3 +89,4 @@ export class OcGoMcpClient {
     return data.choices?.[0]?.message?.content ?? "Failed to analyze image";
   }
 }
+export { NvidiaNimMcpClient as OcGoMcpClient }; // Kept for transition safety during refactoring
