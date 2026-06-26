@@ -545,6 +545,7 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
     progress: Progress<LanguageModelResponsePart>,
     token: CancellationToken,
   ): Promise<void> {
+    const requestPreparationStartedAtMs = Date.now();
     const abortController = new AbortController();
     const cancellationSubscription = token.onCancellationRequested(() => {
       abortController.abort();
@@ -663,6 +664,7 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
         abortController,
         maxToolResultChars,
         supportsVision,
+        requestPreparationStartedAtMs,
       );
     } catch (err) {
       if (token.isCancellationRequested || (err instanceof Error && err.name === "AbortError")) {

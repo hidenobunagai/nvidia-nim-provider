@@ -13,6 +13,7 @@ import {
 import { setupStreamState } from "./shared";
 import { NvidiaNimChatMessage, NvidiaNimChatRequest } from "../types";
 import { getModelAdapter } from "../adapters";
+import { estimateMessagesTokens } from "../tokenizer";
 
 export interface OpenAIModelInfo {
   id: string;
@@ -32,9 +33,16 @@ export async function processOpenAIStream(
   abortController: AbortController,
   maxToolResultChars: number,
   supportsVision: boolean,
+  requestPreparationStartedAtMs: number,
 ): Promise<void> {
+  const requestPreparationDurationMs = Date.now() - requestPreparationStartedAtMs;
+
+  const toolParsingStateStartedAtMs = Date.now();
   const toolSchemas = getToolSchemaMap(options);
   const requestContext = extractChatRequestContext(apiMessages);
+  const toolParsingStateInitDurationMs = Date.now() - toolParsingStateStartedAtMs;
+
+  const inputTokenCount = estimateMessagesTokens(apiMessages);
 
   let convertedMessages = convertMessages(apiMessages, { maxToolResultChars, supportsVision });
 
@@ -294,7 +302,7 @@ export async function processOpenAIStream(
         continue;
       }
 
-      state.finalize("processOpenAIStream");
+      state.finalize("processOpenAIStream", Boolean(deferredInvalidToolFallbackText));
       if (state.reasoningContent) {
         reasoningCache.set(fullContent.trim(), state.reasoningContent.trim());
       }
@@ -304,6 +312,8 @@ export async function processOpenAIStream(
         if (textToReport) {
           progress.report(new vscode.LanguageModelTextPart(textToReport));
         }
+      } else if (deferredInvalidToolFallbackText && !state.emittedToolCall && !state.hasVisibleOutput()) {
+        progress.report(new vscode.LanguageModelTextPart(deferredInvalidToolFallbackText));
       }
       return;
     } catch (err) {

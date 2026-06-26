@@ -46,6 +46,7 @@ export class StreamState {
   isReasoningActive = false;
   hasReasoningStarted = false;
   skippedToolCalls: SkippedToolCall[] = [];
+  firstToolCallAtMs?: number;
 
   nativeToolCalls = new Map<string, NativeToolCall>();
   completedNativeCallIds = new Set<string>();
@@ -156,6 +157,7 @@ export class StreamState {
         ),
       );
       this.emittedToolCall = true;
+      this.firstToolCallAtMs ??= Date.now();
       this.hasEmittedOutput = true;
       this.hasEmittedNormalOutput = true;
       this.emittedCanonicalKeys.add(canonicalKey);
@@ -195,6 +197,7 @@ export class StreamState {
     this.flushPendingText("StreamState");
     this.progress.report(new vscode.LanguageModelToolCallPart(id, name, repairedArgs));
     this.emittedToolCall = true;
+    this.firstToolCallAtMs ??= Date.now();
     this.hasEmittedOutput = true;
     this.hasEmittedNormalOutput = true;
     return true;
