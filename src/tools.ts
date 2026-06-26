@@ -1,18 +1,18 @@
 import * as vscode from "vscode";
 import { PROVIDER_DISPLAY_NAME } from "./constants";
-import { OcGoMcpClient } from "./mcp-compat";
+import { NvidiaNimMcpClient } from "./mcp";
 
 /**
  * Tool for analyzing images using a cached NVIDIA NIM vision-capable model.
  * Non-vision models can delegate image content to this tool for analysis.
  */
-export class OcGoAnalyzeImageTool implements vscode.LanguageModelTool<{
+export class NvidiaNimAnalyzeImageTool implements vscode.LanguageModelTool<{
   image_data: string;
   prompt: string;
 }> {
   static readonly id = "nvidia_nim_analyze_image";
 
-  readonly name = OcGoAnalyzeImageTool.id;
+  readonly name = NvidiaNimAnalyzeImageTool.id;
   readonly description =
     `Analyze an image using ${PROVIDER_DISPLAY_NAME} Vision. Use this tool when you need to ` +
     "understand or describe the content of an image, extract text from images (OCR), " +
@@ -36,10 +36,10 @@ export class OcGoAnalyzeImageTool implements vscode.LanguageModelTool<{
     required: ["image_data", "prompt"],
   };
 
-  private readonly mcpClient: OcGoMcpClient;
+  private readonly mcpClient: NvidiaNimMcpClient;
 
   constructor(secrets: vscode.SecretStorage, modelStorage?: vscode.Memento) {
-    this.mcpClient = new OcGoMcpClient(secrets, modelStorage);
+    this.mcpClient = new NvidiaNimMcpClient(secrets, modelStorage);
   }
 
   async invoke(
@@ -81,10 +81,11 @@ export class OcGoAnalyzeImageTool implements vscode.LanguageModelTool<{
  * @param secrets VS Code secret storage for API key access
  * @returns Disposable for the tool registrations
  */
-export function registerOcGoTools(
+export function registerNvidiaNimTools(
   secrets: vscode.SecretStorage,
   modelStorage?: vscode.Memento,
 ): vscode.Disposable {
-  const analyzeImageTool = new OcGoAnalyzeImageTool(secrets, modelStorage);
-  return vscode.Disposable.from(vscode.lm.registerTool(OcGoAnalyzeImageTool.id, analyzeImageTool));
+  const analyzeImageTool = new NvidiaNimAnalyzeImageTool(secrets, modelStorage);
+  return vscode.Disposable.from(vscode.lm.registerTool(NvidiaNimAnalyzeImageTool.id, analyzeImageTool));
 }
+export { registerNvidiaNimTools as registerOcGoTools }; // Kept for transition safety during refactoring

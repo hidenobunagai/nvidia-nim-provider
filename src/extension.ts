@@ -20,11 +20,11 @@ import {
 } from "./constants";
 import { normalizeNvidiaModels } from "./model-catalog";
 import { debugLog, getOutputChannel, outputLog } from "./output-channel";
-import { OcGoChatModelProvider } from "./provider";
+import { NvidiaNimChatModelProvider } from "./provider";
 import { StatusBarManager } from "./status-bar";
-import { registerOcGoTools } from "./tools";
+import { registerNvidiaNimTools } from "./tools";
 
-let _provider: OcGoChatModelProvider | null = null;
+let _provider: NvidiaNimChatModelProvider | null = null;
 let _refreshQueue: Promise<void> = Promise.resolve();
 
 async function migrateLanguageModelProviderGroup(apiKey: string): Promise<boolean> {
@@ -146,7 +146,7 @@ export function activate(context: vscode.ExtensionContext) {
     "activate",
     `Extension activated. Debug logging ${debugEnabled ? "enabled" : "disabled"}.`,
   );
-  const provider = new OcGoChatModelProvider(context.secrets, ua, context.globalState);
+  const provider = new NvidiaNimChatModelProvider(context.secrets, ua, context.globalState);
   _provider = provider;
 
   context.subscriptions.push(
@@ -159,7 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const registration = vscode.lm.registerLanguageModelChatProvider(PROVIDER_VENDOR, provider);
   context.subscriptions.push(registration);
-  context.subscriptions.push(registerOcGoTools(context.secrets, context.globalState));
+  context.subscriptions.push(registerNvidiaNimTools(context.secrets, context.globalState));
   context.subscriptions.push(
     vscode.commands.registerCommand(MANAGE_COMMAND_ID, async () => {
       const existing = await context.secrets.get(SECRET_STORAGE_KEY);
