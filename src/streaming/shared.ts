@@ -218,7 +218,7 @@ export class StreamState {
   finalize(reasoningLogLabel: string): void {
     this.closeReasoningBlockIfNeeded();
     const leftoverText = this.toolCallScanner.flushText();
-    if (leftoverText) {
+    if (leftoverText && !leftoverText.startsWith("<")) {
       this.pendingText += leftoverText;
     }
 

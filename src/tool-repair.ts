@@ -137,15 +137,56 @@ export function buildInvalidToolCallFallback(
   const skippedWithRequiredArgs = skippedToolCalls.find(
     (tc) => tc.missing.length > 0 || tc.required.length > 0,
   );
-  if (!skippedWithRequiredArgs) return undefined;
-  const missingArgs = (
-    skippedWithRequiredArgs.missing.length > 0
-      ? skippedWithRequiredArgs.missing
-      : skippedWithRequiredArgs.required
-  )
-    .map((a) => `\`${a}\``)
-    .join(", ");
-  return `The model tried to call \`${skippedWithRequiredArgs.name}\` without the required argument(s) ${missingArgs}. Please retry the request and provide those arguments explicitly.`;
+  if (skippedWithRequiredArgs && (skippedWithRequiredArgs.missing.length > 0 || skippedWithRequiredArgs.required.length > 0)) {
+    const missingArgs = (
+      skippedWithRequiredArgs.missing.length > 0
+        ? skippedWithRequiredArgs.missing
+        : skippedWithRequiredArgs.required
+    )
+      .map((a) => `\`${a}\``)
+      .join(", ");
+    return `Tool call \`${skippedWithRequiredArgs.name}\` was rejected: missing ${missingArgs}. Retry with all required fields filled.`;
+  }
+
+  const firstSkippedToolCall = skippedToolCalls[0];
+  if (!firstSkippedToolCall) {
+    return undefined;
+  }
+
+  return `Tool call \`${firstSkippedToolCall.name}\` had invalid arguments. Retry with a valid JSON object.`;
+}
+
+export function buildInvalidToolCallRetryMessage(
+  skippedToolCalls: readonly { name: string; required: string[]; missing: string[] }[],
+): string | undefined {
+  const skippedWithRequiredArgs = skippedToolCalls.find(
+    (tc) => tc.missing.length > 0 || tc.required.length > 0,
+  );
+  if (skippedWithRequiredArgs && (skippedWithRequiredArgs.missing.length > 0 || skippedWithRequiredArgs.required.length > 0)) {
+    const requiredList = (
+      skippedWithRequiredArgs.missing.length > 0
+        ? skippedWithRequiredArgs.missing
+        : skippedWithRequiredArgs.required
+    ).join(", ");
+    return [
+      `Your previous tool call "${skippedWithRequiredArgs.name}" was rejected because it was missing required arguments: ${requiredList}.`,
+      `Retry NOW. Provide a valid JSON object containing ALL of: ${requiredList}.`,
+      "Do not call any tool with an empty object or missing fields.",
+      "Do not ask the user to retry. Do not explain the error.",
+    ].join(" ");
+  }
+
+  const firstSkippedToolCall = skippedToolCalls[0];
+  if (!firstSkippedToolCall) {
+    return undefined;
+  }
+
+  return [
+    `Your previous tool call "${firstSkippedToolCall.name}" was rejected due to invalid or incomplete arguments.`,
+    "Retry NOW with a complete, valid JSON object.",
+    "Do not emit malformed JSON or empty arguments.",
+    "Do not ask the user to retry. Do not explain what went wrong.",
+  ].join(" ");
 }
 
 export function extractChatRequestContext(

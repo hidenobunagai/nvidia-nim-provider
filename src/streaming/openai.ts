@@ -3,7 +3,13 @@ import { streamChatCompletion } from "../api";
 import { DEBUG_ENV_VAR } from "../constants";
 import { convertMessages, convertTools, reasoningCache } from "../openai-conversion";
 import { debugLog } from "../output-channel";
-import { extractChatRequestContext, getToolSchemaMap, isToolCallInput } from "../tool-repair";
+import {
+  extractChatRequestContext,
+  getToolSchemaMap,
+  isToolCallInput,
+  buildInvalidToolCallFallback,
+  buildInvalidToolCallRetryMessage,
+} from "../tool-repair";
 import { setupStreamState } from "./shared";
 import { NvidiaNimChatRequest } from "../types";
 
@@ -192,6 +198,21 @@ export async function processOpenAIStream(
       // Check if retry is needed
       const hasVisibleOutput = state.hasVisibleOutput();
       let shouldRetry = false;
+
+      const fallbackText = state.sawToolCall
+        ? buildInvalidToolCallFallback(state.skippedToolCalls)
+        : undefined;
+      const retryMessage = state.sawToolCall
+        ? buildInvalidToolCallRetryMessage(state.skippedToolCalls)
+        : undefined;
+
+      const willRetryAfterInvalidToolCall =
+        state.sawToolCall &&
+        !state.emittedToolCall &&
+        attempt === 0 &&
+        !state.hasEmittedOutput &&
+        Boolean(fallbackText && retryMessage);
+
       if (
         !hasVisibleOutput &&
         state.reasoningContent &&
@@ -217,6 +238,16 @@ export async function processOpenAIStream(
       ) {
         shouldRetry = true;
         retryReason = "empty-response";
+      } else if (willRetryAfterInvalidToolCall) {
+        shouldRetry = true;
+        retryReason = "invalid_tool_call";
+        convertedMessages = [
+          ...convertedMessages,
+          {
+            role: "system",
+            content: retryMessage!,
+          },
+        ];
       }
 
       attemptSnapshots.push({
