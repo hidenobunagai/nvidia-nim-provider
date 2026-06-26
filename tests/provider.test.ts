@@ -913,7 +913,9 @@ describe("OcGoChatModelProvider", () => {
     // Should inform the user about the model switch
     expect(progress.report).toHaveBeenCalledWith(
       expect.objectContaining({
-        value: expect.stringContaining("Switching to NVIDIA Vision Fallback Model for image analysis"),
+        value: expect.stringContaining(
+          "Switching to NVIDIA Vision Fallback Model for image analysis",
+        ),
       }),
     );
 
@@ -989,7 +991,9 @@ describe("OcGoChatModelProvider", () => {
     const requestBody = (streamChatCompletion as jest.Mock).mock.calls.at(-1)[1];
     expect(requestBody.model).toBe("meta/llama-4-maverick-17b-128e-instruct");
     expect(requestBody.messages[0].content).toContain("[Image Analysis]");
-    expect(requestBody.messages[0].content).toContain("Mocked visual description of image contents");
+    expect(requestBody.messages[0].content).toContain(
+      "Mocked visual description of image contents",
+    );
 
     analyzeImageSpy.mockRestore();
   });

@@ -137,7 +137,10 @@ export function buildInvalidToolCallFallback(
   const skippedWithRequiredArgs = skippedToolCalls.find(
     (tc) => tc.missing.length > 0 || tc.required.length > 0,
   );
-  if (skippedWithRequiredArgs && (skippedWithRequiredArgs.missing.length > 0 || skippedWithRequiredArgs.required.length > 0)) {
+  if (
+    skippedWithRequiredArgs &&
+    (skippedWithRequiredArgs.missing.length > 0 || skippedWithRequiredArgs.required.length > 0)
+  ) {
     const missingArgs = (
       skippedWithRequiredArgs.missing.length > 0
         ? skippedWithRequiredArgs.missing
@@ -162,7 +165,10 @@ export function buildInvalidToolCallRetryMessage(
   const skippedWithRequiredArgs = skippedToolCalls.find(
     (tc) => tc.missing.length > 0 || tc.required.length > 0,
   );
-  if (skippedWithRequiredArgs && (skippedWithRequiredArgs.missing.length > 0 || skippedWithRequiredArgs.required.length > 0)) {
+  if (
+    skippedWithRequiredArgs &&
+    (skippedWithRequiredArgs.missing.length > 0 || skippedWithRequiredArgs.required.length > 0)
+  ) {
     const requiredList = (
       skippedWithRequiredArgs.missing.length > 0
         ? skippedWithRequiredArgs.missing

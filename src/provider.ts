@@ -15,7 +15,6 @@ import {
 import { fetchModels } from "./api";
 import {
   CONTEXT_WINDOW_SAFETY_MARGIN,
-  DEBUG_ENV_VAR,
   MANAGE_COMMAND_ID,
   MODELS_CACHE_VERSION,
   MODELS_CACHE_VERSION_STATE_KEY,
@@ -563,8 +562,10 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
       let effectiveModelId = model.id;
       let effectiveModel = model;
 
-      let { supportsTools, supportsVision, contextWindow } =
-        await this.resolveChatModelRuntimeInfo(model, apiKey);
+      let { supportsTools, supportsVision, contextWindow } = await this.resolveChatModelRuntimeInfo(
+        model,
+        apiKey,
+      );
 
       if (hasImages && !supportsVision) {
         const visionFallback = this.getVisionFallbackModelId();

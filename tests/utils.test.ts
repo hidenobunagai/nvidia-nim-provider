@@ -72,7 +72,9 @@ describe("convertMessages", () => {
       },
     ];
     const result = convertMessages(messages as any, { supportsVision: false });
-    expect(result).toEqual<NvidiaNimChatMessage[]>([{ role: "user", content: "Describe this image" }]);
+    expect(result).toEqual<NvidiaNimChatMessage[]>([
+      { role: "user", content: "Describe this image" },
+    ]);
   });
 });
 

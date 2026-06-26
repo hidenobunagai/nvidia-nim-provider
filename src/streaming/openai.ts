@@ -9,6 +9,8 @@ import {
   isToolCallInput,
   buildInvalidToolCallFallback,
   buildInvalidToolCallRetryMessage,
+  type ToolSchema,
+  type ChatRequestContext,
 } from "../tool-repair";
 import { setupStreamState } from "./shared";
 import { NvidiaNimChatMessage, NvidiaNimChatRequest } from "../types";
@@ -35,12 +37,27 @@ export async function processOpenAIStream(
   supportsVision: boolean,
   requestPreparationStartedAtMs: number,
 ): Promise<void> {
-  const requestPreparationDurationMs = Date.now() - requestPreparationStartedAtMs;
+  let requestPreparationDurationMs: number | undefined;
+  let toolParsingStateInitDurationMs: number | undefined;
 
-  const toolParsingStateStartedAtMs = Date.now();
-  const toolSchemas = getToolSchemaMap(options);
-  const requestContext = extractChatRequestContext(apiMessages);
-  const toolParsingStateInitDurationMs = Date.now() - toolParsingStateStartedAtMs;
+  let toolParsingState:
+    | {
+        toolSchemas: Map<string, ToolSchema>;
+        requestContext: ChatRequestContext | undefined;
+      }
+    | undefined;
+
+  const getToolParsingState = () => {
+    if (toolParsingState) {
+      return toolParsingState;
+    }
+    const toolParsingStateStartedAtMs = Date.now();
+    const toolSchemas = getToolSchemaMap(options);
+    const requestContext = extractChatRequestContext(apiMessages);
+    toolParsingStateInitDurationMs = Date.now() - toolParsingStateStartedAtMs;
+    toolParsingState = { toolSchemas, requestContext };
+    return toolParsingState;
+  };
 
   const inputTokenCount = estimateMessagesTokens(apiMessages);
 
@@ -67,7 +84,12 @@ export async function processOpenAIStream(
   const MAX_RETRIES = 3;
   let currentMaxTokens = requestedMaxTokens;
   let prevEmittedKeys: Set<string> | undefined;
-  let retryReason: "reasoning-only" | "mid-response-stop" | "empty-response" | "invalid_tool_call" | undefined;
+  let retryReason:
+    | "reasoning-only"
+    | "mid-response-stop"
+    | "empty-response"
+    | "invalid_tool_call"
+    | undefined;
   let deferredInvalidToolFallbackText: string | undefined;
   const attemptSnapshots: Array<Record<string, unknown>> = [];
 
@@ -82,6 +104,10 @@ export async function processOpenAIStream(
         attempt,
         retryReason,
       });
+    }
+
+    if (requestPreparationDurationMs === undefined && requestPreparationStartedAtMs !== undefined) {
+      requestPreparationDurationMs = attemptStartedAtMs - requestPreparationStartedAtMs;
     }
 
     const requestBody: NvidiaNimChatRequest = {
@@ -118,7 +144,7 @@ export async function processOpenAIStream(
       });
     }
 
-    const state = setupStreamState(progress, toolSchemas, requestContext, apiMessages);
+    const state = setupStreamState(progress, getToolParsingState, apiMessages);
     if (prevEmittedKeys) {
       for (const key of prevEmittedKeys) {
         state.emittedCanonicalKeys.add(key);
@@ -128,7 +154,9 @@ export async function processOpenAIStream(
     let finishReason: string | null = null;
 
     let firstResponseAtMs: number | undefined;
-    let lastUsage: any;
+    let lastUsage:
+      | { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+      | undefined;
 
     try {
       for await (const chunk of streamChatCompletion(
@@ -311,9 +339,13 @@ export async function processOpenAIStream(
           willRetryAfterInvalidToolCall,
           skippedToolCallCount: state.skippedToolCalls.length,
           ...(state.skippedToolCalls.length > 0
-            ? { skippedToolCallNames: Array.from(new Set(state.skippedToolCalls.map((c) => c.name))) }
+            ? {
+                skippedToolCallNames: Array.from(
+                  new Set(state.skippedToolCalls.map((c) => c.name)),
+                ),
+              }
             : {}),
-          ...(shouldRetry ? { retryReason } : {}),
+          ...(retryReason ? { retryReason } : {}),
           firstTokenLatencyMs: firstResponseAtMs - attemptStartedAtMs,
           ...(state.firstToolCallAtMs !== undefined
             ? { firstToolCallLatencyMs: state.firstToolCallAtMs - attemptStartedAtMs }
@@ -371,7 +403,11 @@ export async function processOpenAIStream(
         if (textToReport) {
           progress.report(new vscode.LanguageModelTextPart(textToReport));
         }
-      } else if (deferredInvalidToolFallbackText && !state.emittedToolCall && !state.hasVisibleOutput()) {
+      } else if (
+        deferredInvalidToolFallbackText &&
+        !state.emittedToolCall &&
+        !state.hasVisibleOutput()
+      ) {
         progress.report(new vscode.LanguageModelTextPart(deferredInvalidToolFallbackText));
       }
       return;

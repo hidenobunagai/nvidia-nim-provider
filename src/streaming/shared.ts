@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import { debugLog } from "../output-channel";
 import { ToolCallScanner, type ParsedTextToolCall } from "../tool-parser";
 import {
-  buildInvalidToolCallFallback,
   buildToolCallCanonicalKey,
   getCompletedToolCallKeys,
   getMissingRequiredToolArguments,
@@ -12,6 +11,7 @@ import {
   type ChatRequestContext,
   type ToolSchema,
 } from "../tool-repair";
+import { filterThinkTagsFromChunk, flushThinkTagFilter, type ThinkTagFilterState } from "../utils";
 
 export interface SkippedToolCall {
   name: string;
@@ -27,12 +27,13 @@ export interface NativeToolCall {
 
 export function setupStreamState(
   progress: vscode.Progress<vscode.LanguageModelResponsePart>,
-  toolSchemas: Map<string, ToolSchema>,
-  requestContext: ChatRequestContext | undefined,
+  getToolParsingState: () => {
+    toolSchemas: Map<string, ToolSchema>;
+    requestContext: ChatRequestContext | undefined;
+  },
   messages: readonly vscode.LanguageModelChatMessage[],
 ): StreamState {
-  const emittedCanonicalKeys = getCompletedToolCallKeys(messages, requestContext, toolSchemas);
-  return new StreamState(progress, toolSchemas, requestContext, emittedCanonicalKeys);
+  return new StreamState(progress, getToolParsingState, messages);
 }
 
 export class StreamState {
@@ -50,19 +51,44 @@ export class StreamState {
 
   nativeToolCalls = new Map<string, NativeToolCall>();
   completedNativeCallIds = new Set<string>();
+  emittedCanonicalKeys = new Set<string>();
 
   private toolCallScanner = new ToolCallScanner();
+  private thinkTagFilterState: ThinkTagFilterState = { insideThinkBlock: false, pendingText: "" };
+  private _toolSchemas?: Map<string, ToolSchema>;
+  private _requestContext?: ChatRequestContext;
+  private _hasResolvedSchemas = false;
 
   constructor(
     private progress: vscode.Progress<vscode.LanguageModelResponsePart>,
-    private toolSchemas: Map<string, ToolSchema>,
-    private requestContext: ChatRequestContext | undefined,
-    public emittedCanonicalKeys: Set<string>,
+    private getToolParsingState: () => {
+      toolSchemas: Map<string, ToolSchema>;
+      requestContext: ChatRequestContext | undefined;
+    },
+    private messages: readonly vscode.LanguageModelChatMessage[],
   ) {}
+
+  private resolveSchemas(): {
+    toolSchemas: Map<string, ToolSchema>;
+    requestContext: ChatRequestContext | undefined;
+  } {
+    if (!this._hasResolvedSchemas) {
+      const { toolSchemas, requestContext } = this.getToolParsingState();
+      this._toolSchemas = toolSchemas;
+      this._requestContext = requestContext;
+      this._hasResolvedSchemas = true;
+      const initialKeys = getCompletedToolCallKeys(this.messages, requestContext, toolSchemas);
+      for (const key of initialKeys) {
+        this.emittedCanonicalKeys.add(key);
+      }
+    }
+    return { toolSchemas: this._toolSchemas!, requestContext: this._requestContext };
+  }
 
   handleReasoningDelta(text: string): void {
     this.reasoningContent += text;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const LanguageModelThinkingPartClass = (vscode as any).LanguageModelThinkingPart;
     if (LanguageModelThinkingPartClass) {
       this.progress.report(new LanguageModelThinkingPartClass(text));
@@ -90,6 +116,7 @@ export class StreamState {
   closeReasoningBlockIfNeeded(): void {
     if (this.isReasoningActive) {
       this.isReasoningActive = false;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const LanguageModelThinkingPartClass = (vscode as any).LanguageModelThinkingPart;
       if (!LanguageModelThinkingPartClass) {
         const endTag = `\n\n---\n\n`;
@@ -115,7 +142,9 @@ export class StreamState {
 
   handleTextDelta(text: string): void {
     this.closeReasoningBlockIfNeeded();
-    const segments = this.toolCallScanner.feed(text);
+    const filteredText = filterThinkTagsFromChunk(text, this.thinkTagFilterState);
+    if (!filteredText) return;
+    const segments = this.toolCallScanner.feed(filteredText);
     for (const segment of segments) {
       if (segment.type === "text") {
         this.pendingText += segment.text;
@@ -123,7 +152,8 @@ export class StreamState {
         this.emitTextEmbeddedToolCall(segment.toolCall);
       } else if (segment.type === "invalidToolCall") {
         this.sawToolCall = true;
-        const schema = this.toolSchemas.get((segment as { name: string }).name.toLowerCase());
+        const { toolSchemas } = this.resolveSchemas();
+        const schema = toolSchemas.get((segment as { name: string }).name.toLowerCase());
         this.skippedToolCalls.push({
           name: (segment as { name: string }).name,
           required: schema?.required ?? [],
@@ -137,13 +167,9 @@ export class StreamState {
   emitTextEmbeddedToolCall(toolCall: ParsedTextToolCall, toolId?: string): void {
     this.closeReasoningBlockIfNeeded();
     this.sawToolCall = true;
-    const schema = this.toolSchemas.get(toolCall.name.toLowerCase());
-    const repairedArgs = repairToolArguments(
-      toolCall.name,
-      toolCall.args,
-      this.requestContext,
-      schema,
-    );
+    const { toolSchemas, requestContext } = this.resolveSchemas();
+    const schema = toolSchemas.get(toolCall.name.toLowerCase());
+    const repairedArgs = repairToolArguments(toolCall.name, toolCall.args, requestContext, schema);
     const canonicalKey = buildToolCallCanonicalKey(toolCall.name, repairedArgs);
     if (this.emittedCanonicalKeys.has(canonicalKey)) return;
 
@@ -174,8 +200,9 @@ export class StreamState {
   tryEmitNativeToolCall(id: string, name: string, rawArgs: unknown): boolean {
     this.closeReasoningBlockIfNeeded();
     this.sawToolCall = true;
-    const schema = this.toolSchemas.get(name.toLowerCase());
-    const repairedArgs = repairToolArguments(name, rawArgs, this.requestContext, schema);
+    const { toolSchemas, requestContext } = this.resolveSchemas();
+    const schema = toolSchemas.get(name.toLowerCase());
+    const repairedArgs = repairToolArguments(name, rawArgs, requestContext, schema);
 
     if (!isToolCallInput(repairedArgs) || !hasRequiredToolArguments(repairedArgs, schema)) {
       this.skippedToolCalls.push({
@@ -204,6 +231,7 @@ export class StreamState {
   }
 
   snapshotEmittedKeys(): Set<string> {
+    this.resolveSchemas();
     return new Set(this.emittedCanonicalKeys);
   }
 
@@ -220,6 +248,28 @@ export class StreamState {
 
   finalize(reasoningLogLabel: string, hasDeferredFallback?: boolean): void {
     this.closeReasoningBlockIfNeeded();
+    const flushedText = flushThinkTagFilter(this.thinkTagFilterState);
+    if (flushedText) {
+      const segments = this.toolCallScanner.feed(flushedText);
+      for (const segment of segments) {
+        if (segment.type === "text") {
+          this.pendingText += segment.text;
+        } else if (segment.type === "toolCall") {
+          this.emitTextEmbeddedToolCall(segment.toolCall);
+        } else if (segment.type === "invalidToolCall") {
+          this.sawToolCall = true;
+          const { toolSchemas } = this.resolveSchemas();
+          const schema = toolSchemas.get((segment as { name: string }).name.toLowerCase());
+          this.skippedToolCalls.push({
+            name: (segment as { name: string }).name,
+            required: schema?.required ?? [],
+            missing: schema?.required ?? [],
+          });
+          debugLog("Skipped invalid text tool call", { name: (segment as { name: string }).name });
+        }
+      }
+    }
+
     const leftoverText = this.toolCallScanner.flushText();
     if (leftoverText && !leftoverText.startsWith("<")) {
       this.pendingText += leftoverText;

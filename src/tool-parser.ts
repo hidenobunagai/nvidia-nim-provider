@@ -1,5 +1,3 @@
-import * as vscode from "vscode";
-
 function safeJsonParse(text: string): unknown {
   if (!text) return {};
   try {

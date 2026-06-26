@@ -86,6 +86,8 @@ export function registerNvidiaNimTools(
   modelStorage?: vscode.Memento,
 ): vscode.Disposable {
   const analyzeImageTool = new NvidiaNimAnalyzeImageTool(secrets, modelStorage);
-  return vscode.Disposable.from(vscode.lm.registerTool(NvidiaNimAnalyzeImageTool.id, analyzeImageTool));
+  return vscode.Disposable.from(
+    vscode.lm.registerTool(NvidiaNimAnalyzeImageTool.id, analyzeImageTool),
+  );
 }
 export { registerNvidiaNimTools as registerOcGoTools }; // Kept for transition safety during refactoring
