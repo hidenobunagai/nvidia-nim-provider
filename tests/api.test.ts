@@ -1,6 +1,6 @@
 import { fetchModels, streamChatCompletion } from "../src/api";
 import { STREAM_IDLE_TIMEOUT_MS } from "../src/constants";
-import { NvidiaModelSummary, OcGoStreamResponse } from "../src/types";
+import { NvidiaModelSummary, NvidiaNimStreamResponse } from "../src/types";
 
 const rawModelSummaries: NvidiaModelSummary[] = [
   {
@@ -180,7 +180,7 @@ describe("streamChatCompletion", () => {
   });
 
   it("yields parsed SSE chunks", async () => {
-    const chunk: OcGoStreamResponse = {
+    const chunk: NvidiaNimStreamResponse = {
       id: "1",
       object: "chat.completion.chunk",
       created: 1,
@@ -202,7 +202,7 @@ describe("streamChatCompletion", () => {
     } as any);
 
     const gen = streamChatCompletion("key", { model: "kimi-k2.6", messages: [], stream: true });
-    const results: OcGoStreamResponse[] = [];
+    const results: NvidiaNimStreamResponse[] = [];
     for await (const item of gen) {
       results.push(item);
     }
@@ -251,7 +251,7 @@ describe("streamChatCompletion", () => {
     expect(fetch).toHaveBeenCalledTimes(3);
   });
   it("handles partial lines across chunks", async () => {
-    const chunk: OcGoStreamResponse = {
+    const chunk: NvidiaNimStreamResponse = {
       id: "1",
       object: "chat.completion.chunk",
       created: 1,
@@ -278,7 +278,7 @@ describe("streamChatCompletion", () => {
     } as any);
 
     const gen = streamChatCompletion("key", { model: "kimi-k2.6", messages: [], stream: true });
-    const results: OcGoStreamResponse[] = [];
+    const results: NvidiaNimStreamResponse[] = [];
     for await (const item of gen) {
       results.push(item);
     }
@@ -303,7 +303,7 @@ describe("streamChatCompletion", () => {
     } as any);
 
     const gen = streamChatCompletion("key", { model: "kimi-k2.6", messages: [], stream: true });
-    const results: OcGoStreamResponse[] = [];
+    const results: NvidiaNimStreamResponse[] = [];
     for await (const item of gen) {
       results.push(item);
     }
@@ -312,7 +312,7 @@ describe("streamChatCompletion", () => {
   });
 
   it("uses dynamic idle timeout based on maxOutputTokens", async () => {
-    const chunk: OcGoStreamResponse = {
+    const chunk: NvidiaNimStreamResponse = {
       id: "1",
       object: "chat.completion.chunk",
       created: 1,
