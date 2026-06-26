@@ -236,7 +236,7 @@ export async function processOpenAIStream(
         state.sawToolCall &&
         !state.emittedToolCall &&
         attempt === 0 &&
-        !state.hasEmittedOutput &&
+        !state.hasVisibleOutput() &&
         Boolean(fallbackText && retryMessage);
 
       if (
