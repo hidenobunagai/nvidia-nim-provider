@@ -42,7 +42,7 @@ export async function processOpenAIStream(
   const MAX_RETRIES = 3;
   let currentMaxTokens = requestedMaxTokens;
   let prevEmittedKeys: Set<string> | undefined;
-  let retryReason: "reasoning-only" | "mid-response-stop" | "empty-response" | undefined;
+  let retryReason: "reasoning-only" | "mid-response-stop" | "empty-response" | "invalid_tool_call" | undefined;
   const attemptSnapshots: Array<Record<string, unknown>> = [];
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
