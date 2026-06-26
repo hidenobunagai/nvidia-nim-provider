@@ -1,13 +1,8 @@
 import * as vscode from "vscode";
-import { OcGoChatMessage } from "../src/types";
-import {
-  convertMessages,
-  convertTools,
-  estimateMessagesTokens,
-  estimateTokens,
-  filterThinkTagsFromChunk,
-  stripThinkTags,
-} from "../src/utils";
+import { NvidiaNimChatMessage } from "../src/types";
+import { convertMessages, convertTools } from "../src/openai-conversion";
+import { estimateMessagesTokens, estimateTokens } from "../src/tokenizer";
+import { filterThinkTagsFromChunk, stripThinkTags } from "../src/utils";
 
 describe("convertMessages", () => {
   it("converts user text message", () => {
@@ -18,7 +13,7 @@ describe("convertMessages", () => {
       },
     ];
     const result = convertMessages(messages as any);
-    expect(result).toEqual<OcGoChatMessage[]>([{ role: "user", content: "Hello" }]);
+    expect(result).toEqual<NvidiaNimChatMessage[]>([{ role: "user", content: "Hello" }]);
   });
 
   it("converts assistant text message", () => {
@@ -29,7 +24,7 @@ describe("convertMessages", () => {
       },
     ];
     const result = convertMessages(messages as any);
-    expect(result).toEqual<OcGoChatMessage[]>([{ role: "assistant", content: "Hi there" }]);
+    expect(result).toEqual<NvidiaNimChatMessage[]>([{ role: "assistant", content: "Hi there" }]);
   });
 
   it("converts system text message", () => {
@@ -40,13 +35,13 @@ describe("convertMessages", () => {
       },
     ];
     const result = convertMessages(messages as any);
-    expect(result).toEqual<OcGoChatMessage[]>([{ role: "system", content: "Be helpful" }]);
+    expect(result).toEqual<NvidiaNimChatMessage[]>([{ role: "system", content: "Be helpful" }]);
   });
 
   it("handles empty messages", () => {
     const messages = [{ role: vscode.LanguageModelChatMessageRole.User, content: [] }];
     const result = convertMessages(messages as any);
-    expect(result).toEqual<OcGoChatMessage[]>([{ role: "user", content: "(empty message)" }]);
+    expect(result).toEqual<NvidiaNimChatMessage[]>([{ role: "user", content: "" }]);
   });
 
   it("converts image parts to image_url for vision-capable models", () => {
@@ -77,7 +72,7 @@ describe("convertMessages", () => {
       },
     ];
     const result = convertMessages(messages as any, { supportsVision: false });
-    expect(result).toEqual<OcGoChatMessage[]>([{ role: "user", content: "Describe this image" }]);
+    expect(result).toEqual<NvidiaNimChatMessage[]>([{ role: "user", content: "Describe this image" }]);
   });
 });
 
