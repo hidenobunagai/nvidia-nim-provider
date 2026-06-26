@@ -10,8 +10,8 @@ import { debugLog } from "./output-channel";
 import {
   NvidiaModelListResponse,
   NvidiaModelSummary,
-  OcGoChatRequest,
-  OcGoStreamResponse,
+  NvidiaNimChatRequest,
+  NvidiaNimStreamResponse,
 } from "./types";
 
 /**
@@ -132,11 +132,11 @@ export async function fetchModels(
 
 export async function* streamChatCompletion(
   apiKey: string,
-  requestBody: OcGoChatRequest,
+  requestBody: NvidiaNimChatRequest,
   signal?: AbortSignal,
   userAgent?: string,
   options?: { maxOutputTokens?: number },
-): AsyncGenerator<OcGoStreamResponse, void, unknown> {
+): AsyncGenerator<NvidiaNimStreamResponse, void, unknown> {
   const response = await fetchWithRetry(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -236,7 +236,7 @@ export async function* streamChatCompletion(
         const data = trimmed.slice(6);
         if (data === "[DONE]") continue;
         try {
-          const parsed = JSON.parse(data) as OcGoStreamResponse;
+          const parsed = JSON.parse(data) as NvidiaNimStreamResponse;
           yield parsed;
         } catch {
           // Ignore malformed lines
@@ -254,7 +254,7 @@ export async function* streamChatCompletion(
       const data = trimmed.slice(6);
       if (data === "[DONE]") continue;
       try {
-        const parsed = JSON.parse(data) as OcGoStreamResponse;
+        const parsed = JSON.parse(data) as NvidiaNimStreamResponse;
         yield parsed;
       } catch {
         // Ignore malformed lines
