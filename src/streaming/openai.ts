@@ -11,7 +11,8 @@ import {
   buildInvalidToolCallRetryMessage,
 } from "../tool-repair";
 import { setupStreamState } from "./shared";
-import { NvidiaNimChatRequest } from "../types";
+import { NvidiaNimChatMessage, NvidiaNimChatRequest } from "../types";
+import { getModelAdapter } from "../adapters";
 
 export interface OpenAIModelInfo {
   id: string;
@@ -39,10 +40,27 @@ export async function processOpenAIStream(
 
   const toolConfig = convertTools(options);
 
+  const adapter = getModelAdapter(model.id);
+  if (adapter.applyMessagesWorkaround) {
+    convertedMessages = adapter.applyMessagesWorkaround(convertedMessages);
+  }
+  const requestProfile = adapter.getProfile({
+    toolsEnabled: Boolean(toolConfig.tools?.length),
+  });
+  if (requestProfile.extraSystemMessages.length > 0) {
+    convertedMessages = [
+      ...requestProfile.extraSystemMessages.map(
+        (content): NvidiaNimChatMessage => ({ role: "system", content }),
+      ),
+      ...convertedMessages,
+    ];
+  }
+
   const MAX_RETRIES = 3;
   let currentMaxTokens = requestedMaxTokens;
   let prevEmittedKeys: Set<string> | undefined;
   let retryReason: "reasoning-only" | "mid-response-stop" | "empty-response" | "invalid_tool_call" | undefined;
+  let deferredInvalidToolFallbackText: string | undefined;
   const attemptSnapshots: Array<Record<string, unknown>> = [];
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -270,12 +288,22 @@ export async function processOpenAIStream(
       if (shouldRetry) {
         state.closeReasoningBlockIfNeeded();
         prevEmittedKeys = state.snapshotEmittedKeys();
+        if (willRetryAfterInvalidToolCall) {
+          deferredInvalidToolFallbackText = fallbackText;
+        }
         continue;
       }
 
       state.finalize("processOpenAIStream");
       if (state.reasoningContent) {
         reasoningCache.set(fullContent.trim(), state.reasoningContent.trim());
+      }
+
+      if (state.sawToolCall && !state.emittedToolCall) {
+        const textToReport = fallbackText || deferredInvalidToolFallbackText;
+        if (textToReport) {
+          progress.report(new vscode.LanguageModelTextPart(textToReport));
+        }
       }
       return;
     } catch (err) {

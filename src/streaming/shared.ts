@@ -215,7 +215,7 @@ export class StreamState {
     );
   }
 
-  finalize(reasoningLogLabel: string): void {
+  finalize(reasoningLogLabel: string, hasDeferredFallback?: boolean): void {
     this.closeReasoningBlockIfNeeded();
     const leftoverText = this.toolCallScanner.flushText();
     if (leftoverText && !leftoverText.startsWith("<")) {
@@ -229,15 +229,6 @@ export class StreamState {
       this.flushPendingText(reasoningLogLabel);
     }
 
-    if (this.sawToolCall && !this.emittedToolCall) {
-      const fallbackText = buildInvalidToolCallFallback(this.skippedToolCalls);
-      if (fallbackText) {
-        this.progress.report(new vscode.LanguageModelTextPart(fallbackText));
-        this.hasEmittedOutput = true;
-        this.hasEmittedNormalOutput = true;
-      }
-    }
-
     if (this.reasoningContent && !this.reasoningFlushed) {
       this.reasoningFlushed = true;
       debugLog(reasoningLogLabel, {
@@ -246,7 +237,7 @@ export class StreamState {
       });
     }
 
-    if (!this.hasEmittedNormalOutput) {
+    if (!this.hasEmittedNormalOutput && !hasDeferredFallback) {
       const fallbackText = this.reasoningContent
         ? "The model completed internal reasoning but returned no visible response. Please retry. If this keeps happening, try a different model."
         : "The model returned no visible response. Please retry.";
