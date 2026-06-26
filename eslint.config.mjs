@@ -23,6 +23,19 @@ export default tseslint.config(
     },
   },
   {
+    files: ["src/tokenizer.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
     ignores: ["out/", "node_modules/", "__mocks__/"],
   },
 );
