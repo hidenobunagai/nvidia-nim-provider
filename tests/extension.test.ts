@@ -1,5 +1,5 @@
 import { fetchModels } from "../src/api";
-import { OcGoChatModelProvider } from "../src/provider";
+import { NvidiaNimChatModelProvider } from "../src/provider";
 
 const registeredCommands = new Map<string, (...args: unknown[]) => unknown>();
 const mockCreateOutputChannel = jest.fn(() => ({
@@ -25,13 +25,13 @@ jest.mock("../src/api", () => ({
 }));
 
 jest.mock("../src/provider", () => ({
-  OcGoChatModelProvider: jest.fn().mockImplementation(() => ({
+  NvidiaNimChatModelProvider: jest.fn().mockImplementation(() => ({
     fireModelInfoChanged: jest.fn(),
   })),
 }));
 
 jest.mock("../src/tools", () => ({
-  registerOcGoTools: jest.fn(() => ({ dispose: jest.fn() })),
+  registerNvidiaNimTools: jest.fn(() => ({ dispose: jest.fn() })),
 }));
 
 const mockStatusBarOk = jest.fn();
@@ -280,7 +280,7 @@ describe("activate", () => {
     activate(context as never);
     await flushAsyncWork();
 
-    const providerInstance = (OcGoChatModelProvider as jest.Mock).mock.results[0]?.value;
+    const providerInstance = (NvidiaNimChatModelProvider as jest.Mock).mock.results[0]?.value;
     const { version } = require("../package.json");
     expect(fetchModels).toHaveBeenCalledWith(
       "test-key",
