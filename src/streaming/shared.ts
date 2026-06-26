@@ -118,8 +118,17 @@ export class StreamState {
     for (const segment of segments) {
       if (segment.type === "text") {
         this.pendingText += segment.text;
-      } else {
+      } else if (segment.type === "toolCall") {
         this.emitTextEmbeddedToolCall(segment.toolCall);
+      } else if (segment.type === "invalidToolCall") {
+        this.sawToolCall = true;
+        const schema = this.toolSchemas.get((segment as { name: string }).name.toLowerCase());
+        this.skippedToolCalls.push({
+          name: (segment as { name: string }).name,
+          required: schema?.required ?? [],
+          missing: schema?.required ?? [],
+        });
+        debugLog("Skipped invalid text tool call", { name: (segment as { name: string }).name });
       }
     }
   }

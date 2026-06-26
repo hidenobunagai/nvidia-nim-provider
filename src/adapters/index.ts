@@ -1,4 +1,4 @@
-import { OcGoChatMessage } from "../types";
+import { NvidiaNimChatMessage } from "../types";
 import { ParsedTextToolCallResult } from "../tool-parser";
 
 export interface NvidiaModelRequestProfile {
@@ -11,7 +11,7 @@ export interface ModelAdapter {
   readonly idPattern: RegExp;
   matches(modelId: string): boolean;
   getProfile(options: { toolsEnabled?: boolean }): NvidiaModelRequestProfile;
-  applyMessagesWorkaround?(messages: OcGoChatMessage[]): OcGoChatMessage[];
+  applyMessagesWorkaround?(messages: NvidiaNimChatMessage[]): NvidiaNimChatMessage[];
   parseTextEmbeddedToolCalls?(text: string): ParsedTextToolCallResult;
 }
 
@@ -52,8 +52,8 @@ export class KimiAdapter extends BaseModelAdapter {
   readonly toolSystemMessage =
     "You are an expert AI programming assistant. Provide correct, concise, production-ready code. When tools are available, answer with concise user-facing text or a native tool call. Only emit tool calls through the designated tool_calls field; never write JSON arguments inline as markdown, backtick fences, or plain text. Every tool call must include ALL required arguments with correct types. Do not reveal chain-of-thought, reasoning scratchpads, or internal reasoning markers in the user-visible response.";
 
-  applyMessagesWorkaround(messages: OcGoChatMessage[]): OcGoChatMessage[] {
-    let patchedMessages: OcGoChatMessage[] | undefined;
+  applyMessagesWorkaround(messages: NvidiaNimChatMessage[]): NvidiaNimChatMessage[] {
+    let patchedMessages: NvidiaNimChatMessage[] | undefined;
     for (const [index, msg] of messages.entries()) {
       if (msg.role !== "assistant" || msg.reasoning_content) {
         continue;
