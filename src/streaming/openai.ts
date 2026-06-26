@@ -73,6 +73,7 @@ export async function processOpenAIStream(
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (token.isCancellationRequested) throw new vscode.CancellationError();
+    const attemptStartedAtMs = Date.now();
     let fullContent = "";
 
     if (attempt > 0) {
@@ -126,6 +127,9 @@ export async function processOpenAIStream(
     const indexToId = new Map<number, string>();
     let finishReason: string | null = null;
 
+    let firstResponseAtMs: number | undefined;
+    let lastUsage: any;
+
     try {
       for await (const chunk of streamChatCompletion(
         apiKey,
@@ -135,6 +139,12 @@ export async function processOpenAIStream(
         { maxOutputTokens: model.maxOutputTokens },
       )) {
         if (token.isCancellationRequested) throw new vscode.CancellationError();
+        if (firstResponseAtMs === undefined) {
+          firstResponseAtMs = Date.now();
+        }
+        if (chunk.usage) {
+          lastUsage = chunk.usage;
+        }
 
         const choice = chunk.choices?.[0];
 
@@ -274,6 +284,55 @@ export async function processOpenAIStream(
             content: retryMessage!,
           },
         ];
+      }
+
+      if (firstResponseAtMs !== undefined) {
+        const totalDurationMs = Date.now() - attemptStartedAtMs;
+        const generationDurationMs = Math.max(
+          0,
+          totalDurationMs - (firstResponseAtMs - attemptStartedAtMs),
+        );
+        const promptTokens = lastUsage?.prompt_tokens;
+        const completionTokens = lastUsage?.completion_tokens;
+        const totalTokens = lastUsage?.total_tokens;
+
+        debugLog("stream timing", {
+          attempt: attempt + 1,
+          totalAttempts: attempt + 1,
+          requestPreparationDurationMs,
+          toolParsingStateInitDurationMs,
+          model: model.id,
+          inputTokenCount,
+          requestedMaxTokens,
+          temperature: temperatureVal,
+          toolsEnabled: Boolean(toolConfig.tools?.length),
+          runtimeMetadataSource: "selected-model",
+          isRetryAttempt: attempt > 0,
+          willRetryAfterInvalidToolCall,
+          skippedToolCallCount: state.skippedToolCalls.length,
+          ...(state.skippedToolCalls.length > 0
+            ? { skippedToolCallNames: Array.from(new Set(state.skippedToolCalls.map((c) => c.name))) }
+            : {}),
+          ...(shouldRetry ? { retryReason } : {}),
+          firstTokenLatencyMs: firstResponseAtMs - attemptStartedAtMs,
+          ...(state.firstToolCallAtMs !== undefined
+            ? { firstToolCallLatencyMs: state.firstToolCallAtMs - attemptStartedAtMs }
+            : {}),
+          totalDurationMs,
+          generationDurationMs,
+          ...(promptTokens !== undefined ? { promptTokens } : {}),
+          ...(completionTokens !== undefined ? { completionTokens } : {}),
+          ...(totalTokens !== undefined ? { totalTokens } : {}),
+          ...(completionTokens !== undefined && generationDurationMs > 0
+            ? {
+                completionTokensPerSecond: Number(
+                  (completionTokens / (generationDurationMs / 1000)).toFixed(2),
+                ),
+              }
+            : {}),
+          reportedContent: state.hasEmittedNormalOutput,
+          emittedToolCall: state.emittedToolCall,
+        });
       }
 
       attemptSnapshots.push({
