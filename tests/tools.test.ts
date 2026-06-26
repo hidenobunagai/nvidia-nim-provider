@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { OcGoAnalyzeImageTool, registerOcGoTools } from "../src/tools";
+import { NvidiaNimAnalyzeImageTool, registerNvidiaNimTools } from "../src/tools";
 
 jest.mock("vscode", () => ({
   LanguageModelToolResult: class {
@@ -16,19 +16,19 @@ jest.mock("vscode", () => ({
   },
 }));
 
-jest.mock("../src/mcp-compat", () => ({
-  OcGoMcpClient: jest.fn().mockImplementation(() => ({
+jest.mock("../src/mcp", () => ({
+  NvidiaNimMcpClient: jest.fn().mockImplementation(() => ({
     analyzeImage: jest.fn().mockResolvedValue("Analyzed result"),
   })),
 }));
 
-describe("OcGoAnalyzeImageTool", () => {
-  let tool: OcGoAnalyzeImageTool;
+describe("NvidiaNimAnalyzeImageTool", () => {
+  let tool: NvidiaNimAnalyzeImageTool;
   let secrets: { get: jest.Mock };
 
   beforeEach(() => {
     secrets = { get: jest.fn() };
-    tool = new OcGoAnalyzeImageTool(secrets as any);
+    tool = new NvidiaNimAnalyzeImageTool(secrets as any);
   });
 
   it("has correct metadata", () => {
@@ -51,13 +51,13 @@ describe("OcGoAnalyzeImageTool", () => {
   });
 
   it("handles analyzeImage errors gracefully", async () => {
-    const { OcGoMcpClient } = jest.requireMock("../src/mcp-compat") as {
-      OcGoMcpClient: jest.Mock;
+    const { NvidiaNimMcpClient } = jest.requireMock("../src/mcp") as {
+      NvidiaNimMcpClient: jest.Mock;
     };
-    OcGoMcpClient.mockImplementationOnce(() => ({
+    NvidiaNimMcpClient.mockImplementationOnce(() => ({
       analyzeImage: jest.fn().mockRejectedValue(new Error("API down")),
     }));
-    const failingTool = new OcGoAnalyzeImageTool(secrets as any);
+    const failingTool = new NvidiaNimAnalyzeImageTool(secrets as any);
     const result = await failingTool.invoke(
       {
         input: { image_data: "data:image/png;base64,abc", prompt: "What?" },
@@ -83,16 +83,16 @@ describe("OcGoAnalyzeImageTool", () => {
   });
 });
 
-describe("registerOcGoTools", () => {
+describe("registerNvidiaNimTools", () => {
   it("returns a disposable", () => {
     const secrets = { get: jest.fn() } as any;
-    const disposable = registerOcGoTools(secrets);
+    const disposable = registerNvidiaNimTools(secrets);
     expect(disposable).toBeDefined();
     expect(typeof disposable.dispose).toBe("function");
     expect(vscode.Disposable.from).toHaveBeenCalled();
     expect((vscode as any).lm.registerTool).toHaveBeenCalledWith(
       "nvidia_nim_analyze_image",
-      expect.any(OcGoAnalyzeImageTool),
+      expect.any(NvidiaNimAnalyzeImageTool),
     );
   });
 });
