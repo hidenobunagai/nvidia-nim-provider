@@ -1,22 +1,22 @@
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
 export type JsonObject = { [k: string]: Json };
 
-export interface OcGoContentPart {
+export interface NvidiaNimContentPart {
   type: "text" | "image_url";
   text?: string;
   image_url?: { url: string };
 }
 
-export interface OcGoChatMessage {
+export interface NvidiaNimChatMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string | OcGoContentPart[];
+  content: string | NvidiaNimContentPart[];
   name?: string;
-  tool_calls?: OcGoToolCall[];
+  tool_calls?: NvidiaNimToolCall[];
   tool_call_id?: string;
   reasoning_content?: string;
 }
 
-export interface OcGoToolCall {
+export interface NvidiaNimToolCall {
   id: string;
   /** Optional index used in streaming tool call deltas */
   index?: number;
@@ -24,14 +24,14 @@ export interface OcGoToolCall {
   function: { name: string; arguments: string };
 }
 
-export interface OcGoTool {
+export interface NvidiaNimTool {
   type: "function";
   function: { name: string; description?: string; parameters?: JsonObject };
 }
 
-export interface OcGoChatRequest {
+export interface NvidiaNimChatRequest {
   model: string;
-  messages: OcGoChatMessage[];
+  messages: NvidiaNimChatMessage[];
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
@@ -39,27 +39,27 @@ export interface OcGoChatRequest {
   stop?: string | string[];
   frequency_penalty?: number;
   presence_penalty?: number;
-  tools?: OcGoTool[];
+  tools?: NvidiaNimTool[];
   tool_choice?: "auto" | "none" | "required" | { type: string; function: { name: string } };
 }
 
-export interface OcGoStreamChoice {
+export interface NvidiaNimStreamChoice {
   index: number;
   delta: {
     role?: string;
     content?: string;
     reasoning_content?: string;
-    tool_calls?: OcGoToolCall[];
+    tool_calls?: NvidiaNimToolCall[];
   };
   finish_reason: string | null;
 }
 
-export interface OcGoStreamResponse {
+export interface NvidiaNimStreamResponse {
   id: string;
   object: string;
   created: number;
   model: string;
-  choices: OcGoStreamChoice[];
+  choices: NvidiaNimStreamChoice[];
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
