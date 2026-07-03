@@ -739,4 +739,3 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
     return apiKey;
   }
 }
-export { NvidiaNimChatModelProvider as OcGoChatModelProvider }; // Kept for transition safety during refactoring

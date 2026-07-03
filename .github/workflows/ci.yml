@@ -7,16 +7,15 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  build-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - run: bun install --ignore-scripts
-      - run: bun run lint
+      - run: bun install --ignore-scripts --frozen-lockfile
       - run: bun run compile
+      - run: bun run lint
       - run: bun run test -- --runInBand
-      - name: Type Check
-        run: npx tsc --noEmit

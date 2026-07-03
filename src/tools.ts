@@ -90,4 +90,3 @@ export function registerNvidiaNimTools(
     vscode.lm.registerTool(NvidiaNimAnalyzeImageTool.id, analyzeImageTool),
   );
 }
-export { registerNvidiaNimTools as registerOcGoTools }; // Kept for transition safety during refactoring

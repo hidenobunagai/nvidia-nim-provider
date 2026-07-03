@@ -89,4 +89,3 @@ export class NvidiaNimMcpClient {
     return data.choices?.[0]?.message?.content ?? "Failed to analyze image";
   }
 }
-export { NvidiaNimMcpClient as OcGoMcpClient }; // Kept for transition safety during refactoring
