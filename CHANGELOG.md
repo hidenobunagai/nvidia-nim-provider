@@ -1,5 +1,31 @@
 # Change Log
 
+## [0.2.3] - 2026-08-02
+
+### Added
+
+- **Truncated response retry.** When the model hits its output token budget mid-response (`finish_reason: "length"`), the extension now retries with a doubled budget instead of silently stopping mid-sentence. If retries are exhausted, a truncation warning is shown.
+- **Action-announcement nudge.** When a model ends its turn by announcing an action ("テストを実行します。" / "I will run the tests.") without emitting the tool call, the buffered announcement is replayed as an assistant message and a nudge asks the model to emit the tool call it announced — within the existing retry budget.
+- **System prompt guidance** (`guidance.ts`): tool-use grounding instructions ("never end your response by announcing an action", prefer parallel tool calls) and DeepSeek identity sanitization (replaces "Claude"/"Anthropic" with "GitHub Copilot"/"NVIDIA NIM").
+- **Thinking-model output budget floor.** Reasoning models (DeepSeek R1, QwQ) get a minimum 16K `max_tokens` budget so internal reasoning cannot exhaust the budget before a visible response is produced.
+- **Capture logs** for truncated and no-output responses: full attempt payloads are written to the output channel for replay against the API.
+- **Documentation** (`docs/architecture.md`, `docs/models.md`, `docs/contributing.md`) and coverage measurement with a 50% threshold and CI artifact upload.
+
+### Fixed
+
+- **Severe token underestimation for Japanese/Chinese/Korean input.** CJK and full-width characters now count as ~1 token each (other characters ~1/2 token each), preventing over-limit requests from slipping through to the API and failing with 400 errors.
+- **Unbounded `reasoningCache` growth.** The cache mapping message text to reasoning content is now a 50-entry LRU.
+- **Chat history pollution from the vision model-switch notice.** "Switching to X for image analysis" is now logged to the debug channel only.
+- **Incomplete text-embedded tool calls not being retried.** `hasVisibleOutput` now excludes buffered text tied to an incomplete tool call, and the tool-call scanner buffer is inspected so cut-off text-embedded calls are reliably retried.
+
+### Changed
+
+- **Module-private output channel** (replaced the `globalThis` singleton) with a new `captureLog` entry point.
+- **SSE buffer safety cap** (1 MB) and a 120s request-level timeout on chat completions.
+- **Retries are silent.** No `(Retrying...)` markers are written into the conversation history; details stay in the debug log.
+- Added type guards (`hasTextValue`, `isToolResultPart`, `isToolCallPart`) in `message-parts.ts` and replaced `as` casts with them in `tool-repair.ts`.
+- Removed no-op tokenizer preload/dispose functions.
+
 ## [0.2.1] - 2026-05-24
 
 ### Added

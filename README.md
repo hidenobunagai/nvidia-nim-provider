@@ -55,6 +55,7 @@ bun install --ignore-scripts
 bun run compile
 bun run lint
 bun run test -- --runInBand
+bun run test:coverage
 ```
 
 Press `F5` in VS Code to launch the Extension Development Host.
@@ -64,10 +65,17 @@ Press `F5` in VS Code to launch the Extension Development Host.
 - `bun run compile` – TypeScript コンパイル
 - `bun run watch` – ファイル変更監視付きコンパイル
 - `bun run test` – テスト実行
+- `bun run test:coverage` – カバレッジ付きテスト実行
 - `bun run lint` – ESLint チェック
 - `bun run lint:fix` – ESLint 自動修正
 - `bun run format` – Prettier フォーマット
 - `bun run package:vsix` – VSIX パッケージ作成
+
+## Documentation
+
+- [Architecture](docs/architecture.md) — module map, data flow, retry and error handling
+- [Model Reference](docs/models.md) — model discovery, capability normalization, family adapters, and known quirks/workarounds
+- [Contributing](docs/contributing.md) — setup, testing, debugging, release steps
 
 ## Marketplace Packaging
 
