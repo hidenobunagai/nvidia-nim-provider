@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { fetchModels, streamChatCompletion } from "../src/api";
 import { CONTEXT_WINDOW_SAFETY_MARGIN } from "../src/constants";
 import { NvidiaNimChatModelProvider } from "../src/provider";
+import { estimateTokens } from "../src/tokenizer";
 
 jest.mock("../src/api", () => ({
   fetchModels: jest.fn(),
@@ -910,14 +911,16 @@ describe("NvidiaNimChatModelProvider", () => {
       token as any,
     );
 
-    // Should inform the user about the model switch
-    expect(progress.report).toHaveBeenCalledWith(
-      expect.objectContaining({
-        value: expect.stringContaining(
-          "Switching to NVIDIA Vision Fallback Model for image analysis",
-        ),
-      }),
-    );
+    // The switch is operational and must NOT appear in the chat history,
+    // so the response should stream the fallback model's text directly.
+    expect(
+      progress.report.mock.calls.map((call) => call[0]?.value).filter((v) => typeof v === "string"),
+    ).toEqual(["Switched vision response"]);
+    expect(
+      progress.report.mock.calls.some((call) =>
+        String(call[0]?.value ?? "").includes("Switching to NVIDIA Vision Fallback Model"),
+      ),
+    ).toBe(false);
 
     // Should call streamChatCompletion using the switched fallback model
     expect(streamChatCompletion).toHaveBeenCalledWith(
@@ -1121,7 +1124,7 @@ describe("NvidiaNimChatModelProvider", () => {
     );
 
     const requestBody = (streamChatCompletion as jest.Mock).mock.calls.at(-1)?.[1];
-    const expectedRemainingBudget = 70000 - 300 - CONTEXT_WINDOW_SAFETY_MARGIN;
+    const expectedRemainingBudget = 70000 - estimateTokens(prompt) - CONTEXT_WINDOW_SAFETY_MARGIN;
 
     expect(requestBody.max_tokens).toBe(expectedRemainingBudget);
   });
@@ -2298,6 +2301,147 @@ describe("NvidiaNimChatModelProvider", () => {
     expect(textReports).toHaveLength(0);
   });
 
+  it("retries a truncated response (finish_reason length) with a doubled budget and warns when retries are exhausted", async () => {
+    (secrets.get as jest.Mock).mockResolvedValue("test-key");
+
+    const truncatedStream = async function* () {
+      yield {
+        choices: [
+          {
+            delta: { content: "This is a partial " },
+            finish_reason: null,
+          },
+        ],
+      };
+      yield {
+        choices: [
+          {
+            delta: {},
+            finish_reason: "length",
+          },
+        ],
+      };
+    };
+
+    (streamChatCompletion as jest.Mock).mockImplementation(() => truncatedStream());
+
+    const progress = { report: jest.fn() };
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })),
+    };
+
+    await provider.provideLanguageModelChatResponse(
+      { id: "kimi-k2.6", maxInputTokens: 100000, maxOutputTokens: 65536 } as any,
+      [{ role: 1, content: [{ value: "Write a long answer" }] }] as any,
+      { modelOptions: {} } as any,
+      progress,
+      token as any,
+    );
+
+    const textReports = progress.report.mock.calls
+      .map((call: any) => call[0]?.value)
+      .filter((v: unknown) => typeof v === "string");
+
+    expect(textReports.some((v: string) => v.includes("truncated"))).toBe(true);
+  });
+
+  it("nudges the model to emit a tool call when it ends with an action announcement", async () => {
+    (secrets.get as jest.Mock).mockResolvedValue("test-key");
+
+    const announcingStream = async function* () {
+      yield {
+        choices: [
+          {
+            delta: { content: "テストを実行します。" },
+            finish_reason: null,
+          },
+        ],
+      };
+      yield {
+        choices: [
+          {
+            delta: {},
+            finish_reason: "stop",
+          },
+        ],
+      };
+    };
+
+    const toolCallStream = async function* () {
+      yield {
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_2",
+                  type: "function",
+                  function: {
+                    name: "run_tests",
+                    arguments: '{"command":"bun test"}',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+    };
+
+    (streamChatCompletion as jest.Mock)
+      .mockImplementationOnce(() => announcingStream())
+      .mockImplementationOnce(() => toolCallStream());
+
+    const progress = { report: jest.fn() };
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })),
+    };
+
+    await provider.provideLanguageModelChatResponse(
+      { id: "kimi-k2.6", maxInputTokens: 100000, maxOutputTokens: 65536 } as any,
+      [{ role: 1, content: [{ value: "Run the tests" }] }] as any,
+      {
+        modelOptions: {},
+        tools: [
+          {
+            name: "run_tests",
+            description: "Run the test suite",
+            inputSchema: {
+              type: "object",
+              properties: { command: { type: "string" } },
+              required: ["command"],
+            },
+          },
+        ],
+      } as any,
+      progress,
+      token as any,
+    );
+
+    expect(streamChatCompletion).toHaveBeenCalledTimes(2);
+
+    const retryRequest = (streamChatCompletion as jest.Mock).mock.calls[1][1];
+    expect(retryRequest.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          content: expect.stringContaining("テストを実行します。"),
+        }),
+        expect.objectContaining({
+          role: "user",
+          content: expect.stringContaining("no tool call was emitted"),
+        }),
+      ]),
+    );
+
+    const toolCallReports = progress.report.mock.calls.filter((c: any) => c[0]?.callId);
+    expect(toolCallReports).toHaveLength(1);
+    expect(toolCallReports[0][0].name).toBe("run_tests");
+  });
+
   it("prefers required-argument retry guidance when multiple invalid tool calls are skipped", async () => {
     (secrets.get as jest.Mock).mockResolvedValue("test-key");
 
@@ -2775,24 +2919,40 @@ describe("NvidiaNimChatModelProvider", () => {
       ({ name, chunks, expectedText }) => [name, chunks, expectedText] as const,
     ),
   )(
-    "suppresses truncated control text at stream end: %s",
+    "retries a truncated text-embedded tool call and shows the retried text: %s",
     async (_fixtureName: string, chunks: string[], expectedText: string) => {
       (secrets.get as jest.Mock).mockResolvedValue("test-key");
 
+      // First stream ends mid-tool-call; the retry stream returns the
+      // expected visible text.
+      let streamCalls = 0;
       const mockStream = async function* () {
-        for (const content of chunks) {
-          yield {
-            choices: [
-              {
-                delta: {
-                  content,
+        streamCalls += 1;
+        if (streamCalls === 1) {
+          for (const content of chunks) {
+            yield {
+              choices: [
+                {
+                  delta: {
+                    content,
+                  },
                 },
-              },
-            ],
-          };
+              ],
+            };
+          }
+          return;
         }
+        yield {
+          choices: [
+            {
+              delta: {
+                content: expectedText,
+              },
+            },
+          ],
+        };
       };
-      (streamChatCompletion as jest.Mock).mockReturnValue(mockStream());
+      (streamChatCompletion as jest.Mock).mockImplementation(() => mockStream());
 
       const progress = { report: jest.fn() };
       const token = {
@@ -2827,6 +2987,7 @@ describe("NvidiaNimChatModelProvider", () => {
           typeof call[0] === "object" && call[0] !== null && "value" in (call[0] as object),
       );
 
+      expect(streamCalls).toBeGreaterThan(1);
       expect(textReports).toHaveLength(1);
       expect(textReports[0][0]).toEqual(expect.objectContaining({ value: expectedText }));
     },

@@ -19,7 +19,7 @@ import {
   TOGGLE_SHOW_REASONING_COMMAND_ID,
 } from "./constants";
 import { normalizeNvidiaModels } from "./model-catalog";
-import { debugLog, getOutputChannel, outputLog } from "./output-channel";
+import { debugLog, disposeOutputChannel, getOutputChannel, outputLog } from "./output-channel";
 import { NvidiaNimChatModelProvider } from "./provider";
 import { StatusBarManager } from "./status-bar";
 import { registerNvidiaNimTools } from "./tools";
@@ -236,4 +236,5 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
   _provider = null;
   _refreshQueue = Promise.resolve();
+  disposeOutputChannel();
 }

@@ -73,7 +73,42 @@ export interface ExtractedMessageContent {
   reasoningContent?: string;
 }
 
-export const reasoningCache = new Map<string, string>();
+/** Maximum number of entries kept in {@link reasoningCache}. */
+const MAX_REASONING_CACHE_ENTRIES = 50;
+
+/**
+ * Small LRU cache mapping assistant message text to its reasoning content.
+ * Bounded so long chat sessions cannot grow it without limit.
+ */
+class ReasoningCache {
+  private readonly entries = new Map<string, string>();
+
+  get(key: string): string | undefined {
+    const value = this.entries.get(key);
+    if (value !== undefined) {
+      // Refresh recency: re-insert at the newest position.
+      this.entries.delete(key);
+      this.entries.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: string, value: string): void {
+    this.entries.delete(key);
+    this.entries.set(key, value);
+    while (this.entries.size > MAX_REASONING_CACHE_ENTRIES) {
+      const oldest = this.entries.keys().next();
+      if (oldest.done) break;
+      this.entries.delete(oldest.value);
+    }
+  }
+
+  clear(): void {
+    this.entries.clear();
+  }
+}
+
+export const reasoningCache = new ReasoningCache();
 
 export function extractReasoningContent(text: string): ExtractedMessageContent {
   // 1. Try HTML details block

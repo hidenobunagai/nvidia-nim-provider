@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { NvidiaNimChatMessage } from "../src/types";
-import { convertMessages, convertTools } from "../src/openai-conversion";
+import { convertMessages, convertTools, reasoningCache } from "../src/openai-conversion";
 import { estimateMessagesTokens, estimateTokens } from "../src/tokenizer";
 import { filterThinkTagsFromChunk, stripThinkTags } from "../src/utils";
 
@@ -81,6 +81,19 @@ describe("convertMessages", () => {
 describe("estimateTokens", () => {
   it("estimates tokens for ASCII text", () => {
     expect(estimateTokens("Hello world")).toBeGreaterThan(0);
+  });
+
+  it("counts CJK characters at ~1 token each", () => {
+    const cjkText = "こんにちは世界";
+    expect(estimateTokens(cjkText)).toBe(cjkText.length);
+  });
+
+  it("counts Latin characters at ~1/2 token each", () => {
+    expect(estimateTokens("abcdefgh")).toBe(4);
+  });
+
+  it("returns 0 for empty text", () => {
+    expect(estimateTokens("")).toBe(0);
   });
 });
 
@@ -374,5 +387,33 @@ describe("filterThinkTagsFromChunk cross-chunk handling", () => {
     const result2 = filterThinkTagsFromChunk("think> visible", state);
     expect(result2).toBe(" visible");
     expect(state.insideThinkBlock).toBe(false);
+  });
+});
+
+describe("reasoningCache LRU", () => {
+  beforeEach(() => {
+    reasoningCache.clear();
+  });
+
+  it("evicts the oldest entry when exceeding 50 entries", () => {
+    for (let i = 0; i < 60; i += 1) {
+      reasoningCache.set(`key-${i}`, `value-${i}`);
+    }
+    expect(reasoningCache.get("key-0")).toBeUndefined();
+    expect(reasoningCache.get("key-59")).toBe("value-59");
+  });
+
+  it("refreshes recency on access", () => {
+    // Fill to capacity with "old" as the least recently used entry
+    for (let i = 0; i < 49; i += 1) {
+      reasoningCache.set(`filler-${i}`, `value-${i}`);
+    }
+    reasoningCache.set("old", "value-old");
+    // Access "old" so it becomes the most recently used
+    reasoningCache.get("old");
+    // Adding a new entry evicts the least recently used entry (filler-0)
+    reasoningCache.set("new", "value-new");
+    expect(reasoningCache.get("filler-0")).toBeUndefined();
+    expect(reasoningCache.get("old")).toBe("value-old");
   });
 });

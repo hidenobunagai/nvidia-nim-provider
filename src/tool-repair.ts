@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { hasTextValue, isToolCallPart, isToolResultPart } from "./message-parts";
 
 export interface ToolSchema {
   required?: string[];
@@ -30,10 +31,7 @@ export function getCompletedToolCallKeys(
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
     if (message.role !== vscode.LanguageModelChatMessageRole.User) continue;
-    const hasNonToolResultContent = message.content.some((part) => {
-      const tp = part as { callId?: unknown; content?: unknown[] };
-      return !(typeof tp.callId === "string" && Array.isArray(tp.content));
-    });
+    const hasNonToolResultContent = message.content.some((part) => !isToolResultPart(part));
     if (hasNonToolResultContent) {
       startIndex = i + 1;
       break;
@@ -43,9 +41,8 @@ export function getCompletedToolCallKeys(
   const completedCallIds = new Set<string>();
   for (const message of messages.slice(startIndex)) {
     for (const part of message.content) {
-      const tp = part as { callId?: unknown; content?: unknown[] };
-      if (typeof tp.callId === "string" && Array.isArray(tp.content)) {
-        completedCallIds.add(tp.callId);
+      if (isToolResultPart(part)) {
+        completedCallIds.add(part.callId);
       }
     }
   }
@@ -53,21 +50,16 @@ export function getCompletedToolCallKeys(
   const keys = new Set<string>();
   for (const message of messages.slice(startIndex)) {
     for (const part of message.content) {
-      const tc = part as { callId?: unknown; name?: unknown; input?: unknown };
-      if (
-        typeof tc.callId !== "string" ||
-        !completedCallIds.has(tc.callId) ||
-        typeof tc.name !== "string"
-      ) {
+      if (!isToolCallPart(part) || !completedCallIds.has(part.callId)) {
         continue;
       }
       const repairedArgs = repairToolArguments(
-        tc.name,
-        tc.input ?? {},
+        part.name,
+        part.input ?? {},
         requestContext,
-        toolSchemas.get(tc.name.toLowerCase()),
+        toolSchemas.get(part.name.toLowerCase()),
       );
-      keys.add(buildToolCallCanonicalKey(tc.name, repairedArgs));
+      keys.add(buildToolCallCanonicalKey(part.name, repairedArgs));
     }
   }
   return keys;
@@ -209,11 +201,8 @@ export function extractChatRequestContext(
       const text =
         part instanceof vscode.LanguageModelTextPart
           ? part.value
-          : typeof part === "object" &&
-              part !== null &&
-              "value" in part &&
-              typeof (part as { value?: unknown }).value === "string"
-            ? (part as { value: string }).value
+          : hasTextValue(part)
+            ? part.value
             : undefined;
       if (!text) continue;
 

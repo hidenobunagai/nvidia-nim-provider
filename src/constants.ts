@@ -33,10 +33,11 @@ export const MAX_RETRY_DELAY_MS = 30000;
 /** Base retry delay in milliseconds */
 export const BASE_RETRY_DELAY_MS = 1000;
 
+/** Request timeout in milliseconds */
+export const REQUEST_TIMEOUT_MS = 120000;
+
 /** Max tool result characters for Anthropic API */
 export const ANTHROPIC_MAX_TOOL_RESULT_CHARS = 20000;
-
-/** Models that require the reasoning_content workaround */
 
 /** Maximum time (ms) between stream chunks before timeout */
 export const STREAM_IDLE_TIMEOUT_MS = 120000;
@@ -46,6 +47,20 @@ export const STREAM_IDLE_TIMEOUT_MAX_MS = 300000;
 
 /** Frequency to check for cancellation during idle (ms) */
 export const STREAM_IDLE_POLL_MS = 500;
+
+/**
+ * Models that emit `reasoning_content` and consume part of the output budget
+ * on internal reasoning before producing visible text/tool calls.  They get a
+ * minimum output budget floor so long reasoning steps cannot exhaust the
+ * budget and truncate the visible response.
+ */
+const THINKING_MODEL_ID_PATTERNS = [/(^|[\/_-])deepseek-r1([\/_-]|$)/i, /(^|[\/_-])qwq([\/_-]|$)/i];
+
+export const THINKING_MODELS = {
+  has(modelId: string): boolean {
+    return THINKING_MODEL_ID_PATTERNS.some((pattern) => pattern.test(modelId));
+  },
+};
 
 export const STATUS_BAR_DEFAULT_TEXT = `$(loading~spin) NVIDIA NIM`;
 export const STATUS_BAR_ERROR_TEXT = `$(error) NVIDIA NIM`;

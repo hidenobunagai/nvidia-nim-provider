@@ -61,6 +61,34 @@ function isIgnorableToolResultPart(part: vscode.LanguageModelInputPart | LegacyP
   return typeof mimeType === "string" && mimeType.includes("cache_control");
 }
 
+/** Type guard: part has a string `value` property (text content). */
+export function hasTextValue(
+  part: vscode.LanguageModelInputPart | LegacyPart,
+): part is { value: string } {
+  if (part instanceof vscode.LanguageModelTextPart) return true;
+  return (
+    typeof part === "object" &&
+    part !== null &&
+    typeof (part as { value?: unknown }).value === "string"
+  );
+}
+
+/** Type guard: part has `callId` (string) and `content` (array) — a tool result. */
+export function isToolResultPart(
+  part: vscode.LanguageModelInputPart | LegacyPart,
+): part is { callId: string; content: unknown[] } {
+  const candidate = part as { callId?: unknown; content?: unknown[] };
+  return typeof candidate.callId === "string" && Array.isArray(candidate.content);
+}
+
+/** Type guard: part has `callId` (string) and `name` (string) — a tool call. */
+export function isToolCallPart(
+  part: vscode.LanguageModelInputPart | LegacyPart,
+): part is { callId: string; name: string; input: unknown } {
+  const candidate = part as { callId?: unknown; name?: unknown; input?: unknown };
+  return typeof candidate.callId === "string" && typeof candidate.name === "string";
+}
+
 export function getTextPartValue(
   part: vscode.LanguageModelInputPart | LegacyPart,
 ): string | undefined {

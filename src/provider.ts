@@ -576,10 +576,12 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
           const fallbackName = fallbackModel?.displayName ?? visionFallback;
           const currentName = currentModel?.displayName ?? model.id;
 
-          progress.report(
-            new vscode.LanguageModelTextPart(
-              `Switching to ${fallbackName} for image analysis (${currentName} does not support vision).\n\n`,
-            ),
+          // Silent like retries: operational notices written into the chat
+          // would persist in the conversation history and confuse the model
+          // on later turns.
+          debugLog(
+            "provideLanguageModelChatResponse",
+            `Switching to ${fallbackName} for image analysis (${currentName} does not support vision).`,
           );
 
           effectiveModel = {

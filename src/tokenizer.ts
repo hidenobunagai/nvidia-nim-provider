@@ -1,38 +1,44 @@
 import * as vscode from "vscode";
 import { getDataPartTextValue, getTextPartValue, type LegacyPart } from "./message-parts";
 
-/** Release all cached encodings. Safe to call during extension deactivation. */
-export function disposeTokenizerCache(): void {
-  // no-op: lightweight fallback tokenizer has no native/WASM cache
-}
+/**
+ * CJK and full-width characters.  Modern tokenizers typically encode these at
+ * roughly one token per character (or more), so they must not be estimated at
+ * the Latin-text rate of ~2 chars per token — doing so undercounts
+ * Japanese/Chinese/Korean input by about half and can let over-limit requests
+ * slip through to the API.
+ */
+const CJK_CHAR_PATTERN =
+  /[\u1100-\u11FF\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFF60\uFFE0-\uFFE6]/;
 
-export function preloadTiktoken(): void {
-  // no-op: kept for backward compatibility with existing call sites
-}
-
-export function estimateTokens(text: string, _modelId?: string): number {
+/**
+ * Estimate tokens for a piece of text.
+ * - CJK / full-width characters count as ~1 token each.
+ * - All other characters count as ~1/2 token each.
+ */
+export function estimateTokens(text: string): number {
   if (!text) return 0;
-  const cjkPattern =
-    /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3000-\u303f\uff00-\uffef\uac00-\ud7af\u3040-\u309f\u30a0-\u30ff]/g;
-  const cjkMatches = text.match(cjkPattern);
-  const cjkCount = cjkMatches ? cjkMatches.length : 0;
-  const otherCount = text.length - cjkCount;
-  // CJK: ~1.5 chars/token → use 1.2 for conservative overestimate
-  // Latin/digits/symbols: ~4 chars/token → use 3 for conservative overestimate
-  // This improves context utilization while still keeping a safety margin.
-  return Math.ceil(cjkCount / 1.2 + otherCount / 3);
+  let cjkCount = 0;
+  let otherCount = 0;
+  for (const ch of text) {
+    if (CJK_CHAR_PATTERN.test(ch)) {
+      cjkCount += 1;
+    } else {
+      otherCount += 1;
+    }
+  }
+  return cjkCount + Math.ceil(otherCount / 2);
 }
 
 export function estimateMessagesTokens(
   messages: readonly { content: (vscode.LanguageModelInputPart | LegacyPart)[] }[],
-  modelId?: string,
 ): number {
   let total = 0;
   for (const message of messages) {
     for (const part of message.content) {
       const textValue = getTextPartValue(part) ?? getDataPartTextValue(part);
       if (textValue !== undefined) {
-        total += estimateTokens(textValue, modelId);
+        total += estimateTokens(textValue);
       }
     }
   }

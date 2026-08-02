@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
+import { buildMissingToolCallNudge, looksLikeActionAnnouncement } from "../announcement";
 import { streamChatCompletion } from "../api";
-import { DEBUG_ENV_VAR } from "../constants";
+import { DEBUG_ENV_VAR, THINKING_MODELS } from "../constants";
+import { applyOpenAiSystemPromptGuidance } from "../guidance";
 import { convertMessages, convertTools, reasoningCache } from "../openai-conversion";
-import { debugLog } from "../output-channel";
+import { captureLog, debugLog } from "../output-channel";
 import {
   extractChatRequestContext,
   getToolSchemaMap,
@@ -12,7 +14,7 @@ import {
   type ToolSchema,
   type ChatRequestContext,
 } from "../tool-repair";
-import { setupStreamState } from "./shared";
+import { setupStreamState, type StreamState } from "./shared";
 import { NvidiaNimChatMessage, NvidiaNimChatRequest } from "../types";
 import { getModelAdapter } from "../adapters";
 import { estimateMessagesTokens } from "../tokenizer";
@@ -20,6 +22,25 @@ import { estimateMessagesTokens } from "../tokenizer";
 export interface OpenAIModelInfo {
   id: string;
   maxOutputTokens: number;
+}
+
+function emitPendingToolCalls(state: StreamState): void {
+  for (const [callId, buf] of Array.from(state.nativeToolCalls.entries())) {
+    if (state.completedNativeCallIds.has(callId)) continue;
+    try {
+      const args = buf.args ? JSON.parse(buf.args) : {};
+      if (buf.id && buf.name && isToolCallInput(args)) {
+        const emitted = state.tryEmitNativeToolCall(buf.id, buf.name, args);
+        if (emitted) {
+          state.completedNativeCallIds.add(callId);
+        }
+      }
+    } catch {
+      state.lostNativeToolCallCount += 1;
+      debugLog("processOpenAIStream", `Failed to parse JSON for tool call ${buf.name}`);
+    }
+    state.nativeToolCalls.delete(callId);
+  }
 }
 
 export async function processOpenAIStream(
@@ -80,7 +101,16 @@ export async function processOpenAIStream(
       ...convertedMessages,
     ];
   }
+  convertedMessages = applyOpenAiSystemPromptGuidance(convertedMessages, model.id, options);
 
+  const isThinkingModel = THINKING_MODELS.has(model.id);
+
+  // Reasoning models may consume the entire output budget on internal thinking
+  // before producing any visible text/tool calls.  Allow multiple retries with
+  // exponentially increasing budgets so the model has room to reason AND respond.
+  // Retries are silent: visible "(Retrying...)" markers would be persisted in
+  // the conversation history and confuse the model on later turns, and VS Code
+  // already shows its own progress indicator while the request is in flight.
   const MAX_RETRIES = 3;
   let currentMaxTokens = requestedMaxTokens;
   let prevEmittedKeys: Set<string> | undefined;
@@ -89,7 +119,13 @@ export async function processOpenAIStream(
     | "mid-response-stop"
     | "empty-response"
     | "invalid_tool_call"
+    | "truncated"
+    | "missing-tool-call"
     | undefined;
+  // Messages sent on the next attempt.  Usually identical to convertedMessages,
+  // but the missing-tool-call retry appends the model's action announcement
+  // plus a nudge so the model can emit the tool call it announced.
+  let requestMessages = convertedMessages;
   let deferredInvalidToolFallbackText: string | undefined;
   const attemptSnapshots: Array<Record<string, unknown>> = [];
 
@@ -99,7 +135,12 @@ export async function processOpenAIStream(
     let fullContent = "";
 
     if (attempt > 0) {
-      currentMaxTokens = Math.min(currentMaxTokens * 2, model.maxOutputTokens);
+      // Reasoning-only retry: the model produced thinking but no text/tool
+      // calls, so the reasoning likely consumed the output budget.  Increase
+      // output tokens significantly so the model has room to reason AND respond.
+      currentMaxTokens = isThinkingModel
+        ? currentMaxTokens * 2
+        : Math.min(currentMaxTokens * 2, model.maxOutputTokens);
       debugLog("processOpenAIStream retry", {
         attempt,
         retryReason,
@@ -112,11 +153,21 @@ export async function processOpenAIStream(
 
     const requestBody: NvidiaNimChatRequest = {
       model: model.id,
-      messages: convertedMessages,
+      messages: requestMessages,
       stream: true,
       temperature: temperatureVal,
-      max_tokens: currentMaxTokens,
     };
+
+    if (isThinkingModel) {
+      // Thinking models consume part of the max_tokens budget for internal
+      // reasoning.  Enforce a minimum output budget so the model has enough
+      // room to reason AND produce a visible response; 16K floor avoids the
+      // common failure where reasoning exhausts the budget before any text
+      // or tool calls are emitted.
+      requestBody.max_tokens = Math.min(Math.max(currentMaxTokens, 16384), model.maxOutputTokens);
+    } else {
+      requestBody.max_tokens = currentMaxTokens;
+    }
 
     const modelOpts = options.modelOptions as Record<string, unknown>;
     if (typeof modelOpts?.top_p === "number") {
@@ -181,11 +232,13 @@ export async function processOpenAIStream(
         }
 
         if (choice?.delta?.content) {
+          emitPendingToolCalls(state);
           fullContent += choice.delta.content;
           state.handleTextDelta(choice.delta.content);
         }
 
         if (choice?.delta?.reasoning_content) {
+          emitPendingToolCalls(state);
           state.handleReasoningDelta(choice.delta.reasoning_content);
         }
 
@@ -212,52 +265,12 @@ export async function processOpenAIStream(
                 args: tc.function?.arguments ?? "",
               });
             }
-
-            const buf = state.nativeToolCalls.get(callId);
-            if (!buf || !buf.args.trim()) continue;
-
-            // Wait until the JSON is structurally complete
-            const trimmedArgs = buf.args.trim();
-            const looksComplete =
-              (trimmedArgs.startsWith("{") && trimmedArgs.endsWith("}")) ||
-              (trimmedArgs.startsWith("[") && trimmedArgs.endsWith("]")) ||
-              trimmedArgs === "null" ||
-              trimmedArgs === "true" ||
-              trimmedArgs === "false" ||
-              /^-?\d+(?:\.\d+)?$/.test(trimmedArgs) ||
-              (trimmedArgs.startsWith('"') && trimmedArgs.endsWith('"'));
-
-            if (!looksComplete) continue;
-
-            try {
-              const args = JSON.parse(buf.args) as unknown;
-              if (buf.id && buf.name && isToolCallInput(args)) {
-                const emitted = state.tryEmitNativeToolCall(buf.id, buf.name, args);
-                if (emitted) {
-                  state.completedNativeCallIds.add(callId);
-                }
-              }
-              state.nativeToolCalls.delete(callId);
-            } catch {
-              // Not complete JSON yet — wait for next chunk
-            }
           }
         }
       }
 
       // Flush remaining buffered tool calls at stream end
-      for (const [callId, buf] of Array.from(state.nativeToolCalls.entries())) {
-        if (state.completedNativeCallIds.has(callId)) continue;
-        try {
-          const args = buf.args ? JSON.parse(buf.args) : {};
-          if (buf.id && buf.name && isToolCallInput(args)) {
-            state.tryEmitNativeToolCall(buf.id, buf.name, args);
-          }
-          state.nativeToolCalls.delete(callId);
-        } catch {
-          debugLog("processOpenAIStream", "Failed to parse incomplete JSON at stream end");
-        }
-      }
+      emitPendingToolCalls(state);
 
       // Check if retry is needed
       const hasVisibleOutput = state.hasVisibleOutput();
@@ -302,11 +315,52 @@ export async function processOpenAIStream(
       ) {
         shouldRetry = true;
         retryReason = "empty-response";
+      } else if (
+        finishReason === "length" &&
+        attempt < MAX_RETRIES &&
+        !token.isCancellationRequested
+      ) {
+        // The model hit its output token budget mid-response, producing only
+        // partial text or a fragment before being cut off.  Retry with larger
+        // budget so the model has room to complete its full response.
+        // This can fire even when hasVisibleOutput is true (e.g. the model
+        // produced one word then exhausted the budget), which the three
+        // conditions above would all skip.
+        shouldRetry = true;
+        retryReason = "truncated";
+      } else if (
+        !state.sawToolCall &&
+        (finishReason === null || finishReason === "stop") &&
+        (toolConfig.tools?.length ?? 0) > 0 &&
+        state.pendingText.trim().length > 0 &&
+        looksLikeActionAnnouncement(state.pendingText) &&
+        attempt < MAX_RETRIES &&
+        !token.isCancellationRequested
+      ) {
+        // The model ended its turn by announcing an action (e.g.
+        // "テストを実行します。" / "I will run the tests.") without emitting the
+        // tool call, which would silently end the agentic loop before the
+        // announced action ever happens.  The announcement text is still
+        // buffered (never shown to the user), so silently replay it as an
+        // assistant message and nudge the model to emit the tool call it
+        // announced.
+        shouldRetry = true;
+        retryReason = "missing-tool-call";
+        const announcement = state.pendingText.trim();
+        requestMessages = [
+          ...requestMessages,
+          {
+            role: "assistant",
+            content: announcement,
+            ...(isThinkingModel ? { reasoning_content: " " } : {}),
+          },
+          { role: "user", content: buildMissingToolCallNudge() },
+        ];
       } else if (willRetryAfterInvalidToolCall) {
         shouldRetry = true;
         retryReason = "invalid_tool_call";
-        convertedMessages = [
-          ...convertedMessages,
+        requestMessages = [
+          ...requestMessages,
           {
             role: "system",
             content: retryMessage!,
@@ -379,6 +433,7 @@ export async function processOpenAIStream(
           pendingTextChars: state.pendingText.length,
           reasoningChars: state.reasoningContent.length,
           nativeToolCalls: state.nativeToolCalls.size,
+          lostNativeToolCalls: state.lostNativeToolCallCount,
           skippedToolCalls: state.skippedToolCalls,
           finishReason,
         },
@@ -393,7 +448,36 @@ export async function processOpenAIStream(
         continue;
       }
 
+      const wasTruncated = finishReason === "length" && hasVisibleOutput;
+      const shouldCaptureNoOutput =
+        !hasVisibleOutput &&
+        (!state.sawToolCall || state.reasoningContent.length > 0 || state.hasIncompleteToolCall());
+      if (shouldCaptureNoOutput) {
+        captureLog("OpenAI exhausted no-output retries", {
+          model: model.id,
+          attempts: attemptSnapshots,
+          hint: "Replay the requestBody payloads above against /chat/completions to compare plain-vs-extension behavior.",
+        });
+      }
+      if (wasTruncated) {
+        captureLog("OpenAI truncated response", {
+          model: model.id,
+          attempts: attemptSnapshots,
+          finishReason,
+          hasVisibleOutput,
+          pendingTextChars: state.pendingText.length,
+        });
+      }
+
+      // Finalize on last attempt (successful or all retries exhausted)
       state.finalize("processOpenAIStream", Boolean(deferredInvalidToolFallbackText));
+      if (wasTruncated) {
+        progress.report(
+          new vscode.LanguageModelTextPart(
+            "\n\n_⚠️ The response was automatically truncated. You can ask the model to continue if the response seems incomplete._",
+          ),
+        );
+      }
       if (state.reasoningContent) {
         reasoningCache.set(fullContent.trim(), state.reasoningContent.trim());
       }

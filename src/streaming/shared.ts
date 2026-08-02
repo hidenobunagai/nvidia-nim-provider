@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { debugLog } from "../output-channel";
-import { ToolCallScanner, type ParsedTextToolCall } from "../tool-parser";
+import { isToolCallStartPrefix, ToolCallScanner, type ParsedTextToolCall } from "../tool-parser";
 import {
   buildToolCallCanonicalKey,
   getCompletedToolCallKeys,
@@ -52,6 +52,14 @@ export class StreamState {
   nativeToolCalls = new Map<string, NativeToolCall>();
   completedNativeCallIds = new Set<string>();
   emittedCanonicalKeys = new Set<string>();
+
+  /**
+   * Number of buffered native tool calls dropped because their streamed
+   * arguments never formed valid JSON.  Diagnostic only: the entries are
+   * dropped to avoid poisoning later retries, but the count is surfaced in
+   * attempt snapshots so mid-response cut-offs remain visible in capture logs.
+   */
+  lostNativeToolCallCount = 0;
 
   private toolCallScanner = new ToolCallScanner();
   private thinkTagFilterState: ThinkTagFilterState = { insideThinkBlock: false, pendingText: "" };
@@ -236,13 +244,18 @@ export class StreamState {
   }
 
   hasVisibleOutput(): boolean {
-    return this.hasEmittedNormalOutput || this.pendingText.trim().length > 0;
+    return (
+      this.hasEmittedNormalOutput ||
+      (this.pendingText.trim().length > 0 && !this.hasIncompleteToolCall())
+    );
   }
 
   hasIncompleteToolCall(): boolean {
     return (
       this.nativeToolCalls.size > 0 ||
-      (this.sawToolCall && !this.emittedToolCall && this.skippedToolCalls.length === 0)
+      (this.sawToolCall && !this.emittedToolCall && this.skippedToolCalls.length === 0) ||
+      (this.toolCallScanner.buffer.trim().length > 0 &&
+        isToolCallStartPrefix(this.toolCallScanner.buffer))
     );
   }
 

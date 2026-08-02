@@ -69,6 +69,33 @@ export function findTrailingTokenPrefixStartAny(text: string, tokens: readonly s
   return bestMatch;
 }
 
+/**
+ * Markers that begin a text-embedded tool call.  When the scanner buffer
+ * starts with one of these (even as an incomplete prefix), the stream was
+ * likely cut off in the middle of a tool call, so the response should be
+ * retried rather than finalized as-is.  DSML control markers are excluded:
+ * they are stripped output (not tool calls), so a truncated DSML marker
+ * must not trigger a retry.
+ */
+const TOOL_CALL_START_MARKERS = [
+  "<|tool_call_begin|>",
+  "<｜tool▁calls▁begin｜>",
+  "<｜tool▁call▁begin｜>",
+  "<tool_calls>",
+  "<tool_call ",
+] as const;
+
+/**
+ * True when the scanner's buffered text starts with a (possibly incomplete)
+ * text-embedded tool call start marker.
+ */
+export function isToolCallStartPrefix(text: string): boolean {
+  const trimmed = text.trimStart();
+  return TOOL_CALL_START_MARKERS.some(
+    (marker) => trimmed.startsWith(marker) || marker.startsWith(trimmed),
+  );
+}
+
 function parseEmbeddedToolParameterValue(rawValue: string): unknown {
   const trimmed = rawValue.trim();
   if (!trimmed) return "";

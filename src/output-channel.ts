@@ -4,76 +4,61 @@ import { DEBUG_ENV_VAR, PROVIDER_DISPLAY_NAME } from "./constants";
 const OUTPUT_CHANNEL_NAME = PROVIDER_DISPLAY_NAME;
 const DEBUG_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Debug]`;
 const LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME}]`;
+const ERROR_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Error]`;
+const WARN_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Warning]`;
+const CAPTURE_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Capture]`;
 
-function getGlobalOutputChannel(): vscode.OutputChannel | undefined {
-  const globalWindow = globalThis as typeof globalThis & {
-    __nvidiaNimOutputChannel?: vscode.OutputChannel;
-  };
-  return globalWindow.__nvidiaNimOutputChannel;
-}
-
-function setGlobalOutputChannel(channel: vscode.OutputChannel): void {
-  const globalWindow = globalThis as typeof globalThis & {
-    __nvidiaNimOutputChannel?: vscode.OutputChannel;
-  };
-  globalWindow.__nvidiaNimOutputChannel = channel;
-}
+/** Module-private output channel. Lazily created on first access. */
+let _channel: vscode.OutputChannel | undefined;
 
 export function getOutputChannel(): vscode.OutputChannel {
-  let channel = getGlobalOutputChannel();
-  if (!channel) {
-    channel = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
-    setGlobalOutputChannel(channel);
+  if (!_channel) {
+    _channel = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
   }
-  return channel;
+  return _channel;
+}
+
+/** Dispose the output channel and reset state. Safe to call during deactivation. */
+export function disposeOutputChannel(): void {
+  if (_channel) {
+    _channel.dispose();
+    _channel = undefined;
+  }
 }
 
 export function debugEnabled(): boolean {
   return process.env[DEBUG_ENV_VAR] === "1";
 }
 
+function appendChannelLine(prefix: string, label: string, value: unknown, ensureChannel = false) {
+  const message = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  const channel = ensureChannel ? getOutputChannel() : _channel;
+  if (channel) {
+    channel.appendLine(`${prefix} ${label}: ${message}`);
+    return;
+  }
+  console.log(`${prefix} ${label}:`, value);
+}
+
 export function debugLog(label: string, value: unknown): void {
   if (!debugEnabled()) {
     return;
   }
-  const message = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  const channel = getGlobalOutputChannel();
-  if (channel) {
-    channel.appendLine(`${DEBUG_LOG_PREFIX} ${label}: ${message}`);
-    return;
-  }
-  console.log(`${DEBUG_LOG_PREFIX} ${label}:`, value);
+  appendChannelLine(DEBUG_LOG_PREFIX, label, value);
+}
+
+export function captureLog(label: string, value: unknown): void {
+  appendChannelLine(CAPTURE_LOG_PREFIX, label, value, true);
 }
 
 export function outputLog(label: string, value: unknown): void {
-  const message = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  const channel = getGlobalOutputChannel();
-  if (channel) {
-    channel.appendLine(`${LOG_PREFIX} ${label}: ${message}`);
-    return;
-  }
-  console.log(`${LOG_PREFIX} ${label}:`, value);
+  appendChannelLine(LOG_PREFIX, label, value);
 }
 
-const ERROR_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Error]`;
-const WARN_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Warning]`;
-
 export function errorLog(label: string, value: unknown): void {
-  const message = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  const channel = getGlobalOutputChannel();
-  if (channel) {
-    channel.appendLine(`${ERROR_LOG_PREFIX} ${label}: ${message}`);
-    return;
-  }
-  console.error(`${ERROR_LOG_PREFIX} ${label}:`, value);
+  appendChannelLine(ERROR_LOG_PREFIX, label, value);
 }
 
 export function warnLog(label: string, value: unknown): void {
-  const message = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  const channel = getGlobalOutputChannel();
-  if (channel) {
-    channel.appendLine(`${WARN_LOG_PREFIX} ${label}: ${message}`);
-    return;
-  }
-  console.warn(`${WARN_LOG_PREFIX} ${label}:`, value);
+  appendChannelLine(WARN_LOG_PREFIX, label, value);
 }

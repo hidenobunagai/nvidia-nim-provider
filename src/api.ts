@@ -2,6 +2,7 @@ import {
   BASE_RETRY_DELAY_MS,
   BASE_URL,
   MAX_RETRY_DELAY_MS,
+  REQUEST_TIMEOUT_MS,
   STREAM_IDLE_TIMEOUT_MAX_MS,
   STREAM_IDLE_TIMEOUT_MIN_MS,
   STREAM_IDLE_TIMEOUT_MS,
@@ -130,6 +131,9 @@ export async function fetchModels(
   }
 }
 
+/** 1 MB safety cap on the line assembly buffer. */
+const MAX_SSE_BUFFER_SIZE = 1024 * 1024;
+
 export async function* streamChatCompletion(
   apiKey: string,
   requestBody: NvidiaNimChatRequest,
@@ -137,6 +141,12 @@ export async function* streamChatCompletion(
   userAgent?: string,
   options?: { maxOutputTokens?: number },
 ): AsyncGenerator<NvidiaNimStreamResponse, void, unknown> {
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+  const combinedSignal = signal
+    ? AbortSignal.any([signal, timeoutController.signal])
+    : timeoutController.signal;
+
   const response = await fetchWithRetry(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -145,8 +155,8 @@ export async function* streamChatCompletion(
       ...(userAgent ? { "User-Agent": userAgent } : {}),
     },
     body: JSON.stringify(requestBody),
-    signal,
-  });
+    signal: combinedSignal,
+  }).finally(() => clearTimeout(timeoutId));
 
   if (!response.ok) {
     const text = await response.text();
@@ -226,7 +236,12 @@ export async function* streamChatCompletion(
 
       lastChunkTime = Date.now();
 
-      buffer += decoder.decode(value, { stream: true });
+      const text = decoder.decode(value, { stream: true });
+      if (buffer.length + text.length > MAX_SSE_BUFFER_SIZE) {
+        debugLog("streamChatCompletion", "SSE buffer exceeded 1 MB — flushing");
+        buffer = "";
+      }
+      buffer += text;
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
 

@@ -18,3 +18,8 @@ coverage/
 # Misc
 .DS_Store
 *.log
+
+# Local state
+.headroom/
+.serena/
+AGENTS.md
