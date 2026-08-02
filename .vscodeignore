@@ -7,6 +7,9 @@ __mocks__/**
 docs/**
 src/**
 tests/**
+coverage/**
+.serena/**
+.headroom/**
 images/icon.svg
 eslint.config.mjs
 jest.config.js
