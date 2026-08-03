@@ -27,6 +27,7 @@ import {
   isNormalizedNvidiaModel,
   NormalizedNvidiaModel,
   normalizeNvidiaModels,
+  rehydrateNormalizedNvidiaModel,
 } from "./model-catalog";
 import { getModelAdapter } from "./adapters";
 import { NvidiaNimMcpClient } from "./mcp";
@@ -313,7 +314,9 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
       return [];
     }
 
-    return storedModels.every(isNormalizedNvidiaModel) ? storedModels : [];
+    return storedModels.every(isNormalizedNvidiaModel)
+      ? storedModels.map(rehydrateNormalizedNvidiaModel)
+      : [];
   }
 
   private async getAvailableModels(
