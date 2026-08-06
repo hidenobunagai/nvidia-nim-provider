@@ -49,7 +49,11 @@ async function migrateLanguageModelProviderGroup(apiKey: string): Promise<boolea
   }
 }
 
-async function initializeStoredApiKey(context: vscode.ExtensionContext, ua: string): Promise<void> {
+async function initializeStoredApiKey(
+  context: vscode.ExtensionContext,
+  ua: string,
+  statusBar: StatusBarManager,
+): Promise<void> {
   const apiKey = await context.secrets.get(SECRET_STORAGE_KEY);
   if (!apiKey) {
     return;
@@ -59,12 +63,13 @@ async function initializeStoredApiKey(context: vscode.ExtensionContext, ua: stri
   if (!migrationDone && (await migrateLanguageModelProviderGroup(apiKey))) {
     await context.globalState.update(MIGRATION_DONE_KEY, true);
   }
-  await refreshModelsFromApi(context, ua, { showMessages: false, apiKey });
+  await refreshModelsFromApi(context, ua, statusBar, { showMessages: false, apiKey });
 }
 
 async function refreshModelsFromApi(
   context: vscode.ExtensionContext,
   ua: string,
+  statusBar: StatusBarManager,
   options: { showMessages: boolean; apiKey?: string },
 ): Promise<void> {
   const nextRefresh = _refreshQueue
@@ -78,6 +83,7 @@ async function refreshModelsFromApi(
         return;
       }
 
+      statusBar.showRefreshing();
       try {
         const rawModels = await fetchModels(apiKey, undefined, ua);
         if (Array.isArray(rawModels)) {
@@ -99,6 +105,7 @@ async function refreshModelsFromApi(
           }
           await context.globalState.update(MODELS_CACHE_VERSION_STATE_KEY, MODELS_CACHE_VERSION);
           _provider?.fireModelInfoChanged();
+          statusBar.showOk(normalizedModels.length);
           debugLog(
             "refreshModels",
             `Refreshed ${normalizedModels.length} models from ${PROVIDER_DISPLAY_NAME} API.`,
@@ -112,6 +119,7 @@ async function refreshModelsFromApi(
         }
 
         debugLog("refreshModels", "Model refresh failed or returned malformed data.");
+        statusBar.showError("Model refresh failed or returned malformed data.");
         if (options.showMessages) {
           vscode.window.showWarningMessage(
             `Failed to refresh models from ${PROVIDER_DISPLAY_NAME} API.`,
@@ -122,6 +130,7 @@ async function refreshModelsFromApi(
           "refreshModels",
           `Model refresh failed: ${error instanceof Error ? error.message : String(error)}`,
         );
+        statusBar.showError(error instanceof Error ? error.message : String(error));
         if (options.showMessages) {
           vscode.window.showErrorMessage(
             `Failed to refresh models: ${error instanceof Error ? error.message : String(error)}`,
@@ -195,7 +204,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand(REFRESH_MODELS_COMMAND_ID, async () => {
-      await refreshModelsFromApi(context, ua, { showMessages: true });
+      await refreshModelsFromApi(context, ua, statusBar, { showMessages: true });
     }),
   );
 
@@ -230,7 +239,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  void initializeStoredApiKey(context, ua);
+  void initializeStoredApiKey(context, ua, statusBar);
 }
 
 export function deactivate() {
