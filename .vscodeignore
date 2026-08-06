@@ -10,6 +10,13 @@ tests/**
 coverage/**
 .serena/**
 .headroom/**
+.code-review-graph/**
+.claude/**
+.codebuddy/**
+.cursor/**
+.gemini/**
+.kiro/**
+.qoder/**
 images/icon.svg
 eslint.config.mjs
 jest.config.js
@@ -24,3 +31,12 @@ node_modules/**
 .gitignore
 package-lock.json
 out/**/*.map
+.cursorrules
+.windsurfrules
+.mcp.json
+opencode.jsonc
+AGENTS.md
+CLAUDE.md
+CODEBUDDY.md
+GEMINI.md
+QODER.md
