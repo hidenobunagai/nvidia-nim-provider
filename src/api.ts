@@ -199,7 +199,7 @@ export async function* streamChatCompletion(
           return;
         }
         settled = true;
-        clearTimeout(timeoutId);
+        clearTimeout(idleTimeoutId);
         resolve(result);
       };
       const rejectOnce = (error: unknown) => {
@@ -207,10 +207,10 @@ export async function* streamChatCompletion(
           return;
         }
         settled = true;
-        clearTimeout(timeoutId);
+        clearTimeout(idleTimeoutId);
         reject(error);
       };
-      const timeoutId = setTimeout(() => {
+      const idleTimeoutId = setTimeout(() => {
         const idleSec = Math.round((Date.now() - lastChunkTime) / 1000);
         const err = new Error(`Stream idle timeout: no data for ${idleSec}s`);
         err.name = "TimeoutError";
