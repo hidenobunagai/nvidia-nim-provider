@@ -4,8 +4,6 @@ import { DEBUG_ENV_VAR, PROVIDER_DISPLAY_NAME } from "./constants";
 const OUTPUT_CHANNEL_NAME = PROVIDER_DISPLAY_NAME;
 const DEBUG_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Debug]`;
 const LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME}]`;
-const ERROR_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Error]`;
-const WARN_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Warning]`;
 const CAPTURE_LOG_PREFIX = `[${PROVIDER_DISPLAY_NAME} Capture]`;
 
 /** Module-private output channel. Lazily created on first access. */
@@ -53,12 +51,4 @@ export function captureLog(label: string, value: unknown): void {
 
 export function outputLog(label: string, value: unknown): void {
   appendChannelLine(LOG_PREFIX, label, value);
-}
-
-export function errorLog(label: string, value: unknown): void {
-  appendChannelLine(ERROR_LOG_PREFIX, label, value);
-}
-
-export function warnLog(label: string, value: unknown): void {
-  appendChannelLine(WARN_LOG_PREFIX, label, value);
 }

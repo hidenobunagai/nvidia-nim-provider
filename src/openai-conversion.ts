@@ -275,14 +275,6 @@ export function convertMessages(
   return result;
 }
 
-export function applyReasoningContentWorkaround(
-  messages: NvidiaNimChatMessage[],
-  _modelId: string,
-): NvidiaNimChatMessage[] {
-  // Can be extended if specific NVIDIA models need it
-  return messages;
-}
-
 export function convertTools(options: vscode.ProvideLanguageModelChatResponseOptions): {
   tools?: NvidiaNimTool[];
   tool_choice?: "auto" | "required" | { type: "function"; function: { name: string } };
