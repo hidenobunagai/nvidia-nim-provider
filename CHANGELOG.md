@@ -1,5 +1,20 @@
 # Change Log
 
+## [0.3.1] - 2026-08-15
+
+### Changed
+
+- **Adapter profiles as data.** The per-family adapter class hierarchy in `src/adapters/index.ts`
+  was replaced with a plain profile table (same patterns, temperatures, and tool-use messages).
+  Also removed the per-model adapter cache (14 regex matches per lookup are negligible) and the
+  unused `parseTextEmbeddedToolCalls` hook.
+- **Clean builds.** `bun run compile` now removes `out/` before compiling, so stale compiled files
+  (e.g. `out/model-profile.js`, `out/mcp-compat.js` from earlier renames) no longer ship in the
+  VSIX. This release's package is ~10 KB smaller.
+- Removed dead code (`stripThinkTags` had no callers), a duplicated trailing-prefix finder in
+  `utils.ts`, a duplicated `DEFAULT_MAX_TOKENS` constant, and the unused `jest-util`
+  devDependency.
+
 ## [0.3.0] - 2026-08-15
 
 ### Added
