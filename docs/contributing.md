@@ -64,7 +64,7 @@ bun run format     # Prettier formatting
 NVIDIA NIM models are discovered dynamically from the API, but model-family behavior is tuned in two places:
 
 1. **`src/model-catalog.ts`** — `KNOWN_MODEL_OVERRIDES` maps model IDs to friendly display names and (optionally) capability overrides.
-2. **`src/adapters/index.ts`** — each model family (`DeepSeekAdapter`, `KimiAdapter`, `GlmAdapter`, ...) sets default temperatures and a tool-use system message via `idPattern` regex.
+2. **`src/adapters/index.ts`** — each model family profile sets default temperatures and a tool-use system message via an `idPattern` regex (order matters: the first matching profile wins).
 
 ## Debugging
 
