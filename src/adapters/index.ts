@@ -82,7 +82,7 @@ export class LlamaAdapter extends BaseModelAdapter {
 }
 
 export class MistralAdapter extends BaseModelAdapter {
-  readonly idPattern = /(^|[\/_-])(mistral|mixtral)([\/_-]|$)/i;
+  readonly idPattern = /(^|[\/_-])(mistral|mixtral|codestral)([\/_-]|$)/i;
   readonly defaultTemperature = 0.3;
   readonly toolTemperature = 0.2;
   readonly toolSystemMessage =
@@ -95,6 +95,14 @@ export class QwenAdapter extends BaseModelAdapter {
   readonly toolTemperature = 0.05;
   readonly toolSystemMessage =
     "You are an expert AI programming assistant. Provide correct, concise, production-ready code. When calling tools, emit a valid JSON arguments object only. Do not wrap tool arguments in markdown fences, backticks, or explanatory prose. Do not provide multiple alternative actions for the user to choose from.";
+}
+
+export class MiniMaxAdapter extends BaseModelAdapter {
+  readonly idPattern = /(^|[\/_-])minimax([\/_-]|$)/i;
+  readonly defaultTemperature = 0.6;
+  readonly toolTemperature = 0.4;
+  readonly toolSystemMessage =
+    "You are an expert AI programming assistant. Provide correct, concise, production-ready code. When tools are available, answer with concise user-facing text or a valid tool call. Emit tool calls with complete JSON arguments; do not wrap them in markdown fences, backticks, or explanatory prose.";
 }
 
 export class PhiAdapter extends BaseModelAdapter {
@@ -163,6 +171,7 @@ const ADAPTERS: ModelAdapter[] = [
   new GptAdapter(),
   new MistralAdapter(),
   new QwenAdapter(),
+  new MiniMaxAdapter(),
   new PhiAdapter(),
   new YiAdapter(),
   new GemmaAdapter(),

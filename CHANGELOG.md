@@ -1,5 +1,38 @@
 # Change Log
 
+## [0.3.0] - 2026-08-15
+
+### Added
+
+- **Current NVIDIA catalog support.** The model catalog (`src/model-catalog.ts`) now ships overrides
+  for the models currently served by the NVIDIA NIM API — DeepSeek V4 Flash, Kimi K2.6, GLM 5.2,
+  GPT-OSS 120B/20B, MiniMax M3, Muse Glimmer 30B, Gemma 4 31B, Nemotron 3 (Nano/Super/Ultra),
+  Llama 3.3 Nemotron Super 49B, Llama 3.1 Nemotron 51B, Mistral Large 2, and more — with display
+  names, context windows and vision flags. The API no longer returns capability metadata, so these
+  overrides keep the picker, token accounting and the vision fallback accurate.
+- **Vision capability overrides.** VLM models (Llama 3.2 Vision, Nemotron Nano VL, Nemotron 3 Nano
+  Omni, Nemotron Nano 12B V2 VL, Phi 3 Vision, VILA, NeVA, Fuyu, DePlot, Kosmos 2) are now
+  recognized as vision-capable even without API metadata, fixing the image fallback and the
+  `analyze_image` tool. Known non-tool VLMs (Fuyu, DePlot, Kosmos 2) are excluded from Agent mode.
+- **Preferred vision fallback.** `findPreferredVisionModel` picks the best known VLM for the silent
+  image fallback (Llama 3.2 Vision → Nemotron Nano VL → Nemotron 3 Nano Omni → Phi 3 Vision →
+  VILA/NeVA) instead of whatever the API lists first.
+- **Broader thinking-model coverage.** `THINKING_MODELS` now also matches DeepSeek V4, Kimi K2.x,
+  GLM 5.x, GPT-OSS, MiniMax M3, Nemotron 3 and Nemotron Super, giving them the 16K output budget
+  floor and silent reasoning-only retries previously reserved for DeepSeek R1/QwQ.
+- **MiniMax adapter** with family-appropriate temperature defaults and tool-use guidance.
+- **Stricter non-chat filtering.** Guard/safety models (nemoguard, llama-guard, content-safety),
+  base/completion models (codegemma, codellama, starcoder2, llama2, gemma-2b, recurrentgemma),
+  image generation (diffusiongemma), translation (riva-translate) and calibration models are now
+  excluded from the model picker.
+- Codestral models now use the Mistral family adapter.
+
+### Changed
+
+- Bumped `MODELS_CACHE_VERSION` to 4 so existing installations refresh their cached catalog and
+  pick up the new overrides automatically.
+- Updated `docs/models.md` and the README with the current catalog and reasoning model list.
+
 ## [0.2.3] - 2026-08-02
 
 ### Added

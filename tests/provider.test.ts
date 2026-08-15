@@ -176,7 +176,7 @@ describe("NvidiaNimChatModelProvider", () => {
     expect(globalState.update).toHaveBeenCalledWith("nvidia-nim.models", [
       {
         id: "meta/llama-3.1-8b-instruct",
-        displayName: "llama-3.1-8b-instruct",
+        displayName: "Llama 3.1 8B Instruct",
         contextWindow: 131072,
         maxOutputTokens: 65536,
         supportsTools: true,
@@ -186,7 +186,7 @@ describe("NvidiaNimChatModelProvider", () => {
     expect(infos).toEqual([
       expect.objectContaining({
         id: "meta/llama-3.1-8b-instruct",
-        name: "llama-3.1-8b-instruct",
+        name: "Llama 3.1 8B Instruct",
         detail: "NVIDIA NIM",
         apiKey: "configured-key",
       }),
@@ -239,7 +239,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 3;
+        return 4;
       }
       return undefined;
     });
@@ -273,7 +273,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 3;
+        return 4;
       }
       return undefined;
     });
@@ -339,7 +339,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 3;
+        return 4;
       }
       return undefined;
     });
@@ -385,7 +385,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 3;
+        return 4;
       }
       return undefined;
     });
@@ -425,7 +425,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 3;
+        return 4;
       }
       return undefined;
     });
@@ -465,7 +465,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 3;
+        return 4;
       }
       return undefined;
     });
@@ -589,7 +589,7 @@ describe("NvidiaNimChatModelProvider", () => {
         return cachedModels;
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 3;
+        return 4;
       }
       return undefined;
     });
@@ -661,7 +661,7 @@ describe("NvidiaNimChatModelProvider", () => {
         return cachedModels;
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 3;
+        return 4;
       }
       return undefined;
     });
@@ -927,6 +927,77 @@ describe("NvidiaNimChatModelProvider", () => {
       "test-key",
       expect.objectContaining({
         model: "nvidia/vision-capable-fallback",
+      }),
+      expect.any(AbortSignal),
+      "test-ua",
+      { maxOutputTokens: 16384 },
+    );
+  });
+
+  it("prefers a modern vision model over an older VLM for the image fallback", async () => {
+    (secrets.get as jest.Mock).mockResolvedValue("test-key");
+    (globalState.get as jest.Mock).mockReturnValue([
+      {
+        id: "meta/llama-4-maverick-17b-128e-instruct",
+        displayName: "Llama 4 Maverick 17B 128E Instruct",
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsTools: true,
+        supportsVision: false,
+      },
+      {
+        id: "adept/fuyu-8b",
+        displayName: "Fuyu 8B",
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsTools: false,
+        supportsVision: true,
+      },
+      {
+        id: "meta/llama-3.2-11b-vision-instruct",
+        displayName: "Llama 3.2 11B Vision Instruct",
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsTools: true,
+        supportsVision: true,
+      },
+    ]);
+
+    const mockStream = async function* () {
+      yield { choices: [{ delta: { content: "Preferred vision response" } }] };
+    };
+    (streamChatCompletion as jest.Mock).mockReturnValue(mockStream());
+
+    const progress = { report: jest.fn() };
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })),
+    };
+
+    await provider.provideLanguageModelChatResponse(
+      {
+        id: "meta/llama-4-maverick-17b-128e-instruct",
+        maxInputTokens: 100000,
+        maxOutputTokens: 16384,
+      } as any,
+      [
+        {
+          role: 1,
+          content: [
+            { value: "Identify this image" },
+            { mimeType: "image/png", data: new Uint8Array([1, 2, 3]) },
+          ],
+        },
+      ] as any,
+      { modelOptions: {} } as any,
+      progress,
+      token as any,
+    );
+
+    expect(streamChatCompletion).toHaveBeenCalledWith(
+      "test-key",
+      expect.objectContaining({
+        model: "meta/llama-3.2-11b-vision-instruct",
       }),
       expect.any(AbortSignal),
       "test-ua",

@@ -3,7 +3,7 @@
   "publisher": "HidenobuNagai",
   "displayName": "NVIDIA NIM Provider",
   "description": "Use NVIDIA NIM models in GitHub Copilot Chat for VS Code",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "license": "MIT",
   "repository": {
     "type": "git",

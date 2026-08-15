@@ -24,6 +24,7 @@ import {
   SECRET_STORAGE_KEY,
 } from "./constants";
 import {
+  findPreferredVisionModel,
   isNormalizedNvidiaModel,
   NormalizedNvidiaModel,
   normalizeNvidiaModels,
@@ -225,9 +226,7 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
   }
 
   private getVisionFallbackModelId(): string | undefined {
-    const cachedModels = this.getNormalizedModels();
-    const visionModel = cachedModels.find((model) => model.supportsVision);
-    return visionModel?.id;
+    return findPreferredVisionModel(this.getNormalizedModels())?.id;
   }
 
   private async processImagesForNonVisionModel(

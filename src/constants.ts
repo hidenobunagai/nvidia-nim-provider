@@ -7,7 +7,7 @@ export const SECRET_STORAGE_KEY = "nvidia-nim.apiKey";
 export const RAW_MODELS_STATE_KEY = "nvidia-nim.rawModels";
 export const MODELS_STATE_KEY = "nvidia-nim.models";
 export const MODELS_CACHE_VERSION_STATE_KEY = "nvidia-nim.modelsCacheVersion";
-export const MODELS_CACHE_VERSION = 3;
+export const MODELS_CACHE_VERSION = 4;
 export const MIGRATION_DONE_KEY = "nvidia-nim.legacyMigrationDone";
 export const DEBUG_STATE_KEY = "nvidia-nim.debug";
 export const DEBUG_ENV_VAR = "NVIDIA_NIM_DEBUG";
@@ -44,7 +44,24 @@ export const STREAM_IDLE_TIMEOUT_MAX_MS = 300000;
  * minimum output budget floor so long reasoning steps cannot exhaust the
  * budget and truncate the visible response.
  */
-const THINKING_MODEL_ID_PATTERNS = [/(^|[\/_-])deepseek-r1([\/_-]|$)/i, /(^|[\/_-])qwq([\/_-]|$)/i];
+const THINKING_MODEL_ID_PATTERNS = [
+  /(^|[\/_-])deepseek-r1([\/_-]|$)/i,
+  // DeepSeek V4 (Flash) exposes visible reasoning through reasoning_content
+  /(^|[\/_-])deepseek-v4([\/_-]|$)/i,
+  // Moonshot Kimi K2 / K2.6 native thinking mode
+  /(^|[\/_-])kimi-k2([.\/_-]|$)/i,
+  // Zhipu GLM-5.x reasoning models
+  /(^|[\/_-])glm-5([.\/_-]|$)/i,
+  // OpenAI GPT-OSS open-weight thinking models
+  /(^|[\/_-])gpt-oss([\/_-]|$)/i,
+  // MiniMax M3 reasoning model
+  /(^|[\/_-])minimax-m3([\/_-]|$)/i,
+  // NVIDIA Nemotron 3 reasoning family
+  /(^|[\/_-])nemotron-3([\/_-]|$)/i,
+  // Llama 3.3 Nemotron Super 49B (reasoning-tuned)
+  /(^|[\/_-])nemotron-super([\/_-]|$)/i,
+  /(^|[\/_-])qwq([\/_-]|$)/i,
+];
 
 export const THINKING_MODELS = {
   has(modelId: string): boolean {
