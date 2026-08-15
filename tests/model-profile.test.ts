@@ -5,6 +5,8 @@ describe("getModelAdapter", () => {
     ["kimi-k2.6", 0.2, 0.1, "Do not reveal chain-of-thought"],
     ["zai-org/glm-4.5", 0.1, 0.05, "strict JSON arguments"],
     ["meta/llama-4-maverick-17b-128e-instruct", 0.2, 0.1, "Do not emit pseudo tool syntax"],
+    ["minimaxai/minimax-m3", 0.6, 0.4, "complete JSON arguments"],
+    ["mistralai/codestral-22b-instruct-v0.1", 0.3, 0.2, "Do not include disclaimers"],
   ])(
     "returns a specialized tool-enabled profile for %s",
     (
