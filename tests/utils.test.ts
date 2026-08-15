@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { NvidiaNimChatMessage } from "../src/types";
 import { convertMessages, convertTools, reasoningCache } from "../src/openai-conversion";
 import { estimateMessagesTokens, estimateTokens } from "../src/tokenizer";
-import { filterThinkTagsFromChunk, stripThinkTags } from "../src/utils";
+import { filterThinkTagsFromChunk } from "../src/utils";
 
 describe("convertMessages", () => {
   it("converts user text message", () => {
@@ -333,28 +333,6 @@ describe("convertMessages with tools", () => {
     ];
     const result = convertMessages(messages as any, { maxToolResultChars: 100 });
     expect(result[0].content).toBe(shortContent);
-  });
-});
-
-describe("stripThinkTags", () => {
-  it("removes think tags", () => {
-    expect(stripThinkTags("<think>reasoning</think>answer")).toBe("answer");
-  });
-
-  it("handles nested multiline think tags", () => {
-    expect(stripThinkTags("<think>\nstep1\nstep2\n</think>\nresult")).toBe("\nresult");
-  });
-
-  it("is case-insensitive", () => {
-    expect(stripThinkTags("<THINK>hidden</THINK>visible")).toBe("visible");
-  });
-
-  it("returns plain text unchanged", () => {
-    expect(stripThinkTags("plain text")).toBe("plain text");
-  });
-
-  it("handles incomplete open tag", () => {
-    expect(stripThinkTags("<think>no close")).toBe("<think>no close");
   });
 });
 

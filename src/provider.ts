@@ -24,6 +24,7 @@ import {
   SECRET_STORAGE_KEY,
 } from "./constants";
 import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
   findPreferredVisionModel,
   isNormalizedNvidiaModel,
   NormalizedNvidiaModel,
@@ -35,8 +36,6 @@ import { debugLog, outputLog } from "./output-channel";
 import { estimateMessagesTokens, estimateTokens } from "./tokenizer";
 import { processOpenAIStream } from "./streaming/openai";
 import { LegacyPart } from "./message-parts";
-
-const DEFAULT_MAX_TOKENS = 65536;
 
 interface StructuredError {
   code: string;
@@ -383,7 +382,8 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
       const runtimeInfo = {
         supportsTools: Boolean(capabilities.toolCalling),
         supportsVision: capabilities.imageInput === true,
-        contextWindow: model.maxInputTokens + Math.min(model.maxOutputTokens, DEFAULT_MAX_TOKENS),
+        contextWindow:
+          model.maxInputTokens + Math.min(model.maxOutputTokens, DEFAULT_MAX_OUTPUT_TOKENS),
         runtimeMetadataSource: "selected-model" as const,
       };
       this.runtimeInfoCache.set(model.id, runtimeInfo);
@@ -398,7 +398,7 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
       supportsVision: fetchedModel?.supportsVision ?? false,
       contextWindow:
         fetchedModel?.contextWindow ??
-        model.maxInputTokens + Math.min(model.maxOutputTokens, DEFAULT_MAX_TOKENS),
+        model.maxInputTokens + Math.min(model.maxOutputTokens, DEFAULT_MAX_OUTPUT_TOKENS),
       runtimeMetadataSource: "fetched-model" as const,
     };
     this.runtimeInfoCache.set(model.id, runtimeInfo);
@@ -523,7 +523,7 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
         version: "1.0.0",
         maxInputTokens: Math.max(
           1,
-          info.contextWindow - Math.min(info.maxOutputTokens, DEFAULT_MAX_TOKENS),
+          info.contextWindow - Math.min(info.maxOutputTokens, DEFAULT_MAX_OUTPUT_TOKENS),
         ),
         maxOutputTokens: info.maxOutputTokens,
         isUserSelectable: true,
@@ -632,7 +632,9 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
       const maxTokensVal = (options.modelOptions as Record<string, unknown>)?.max_tokens;
       const requestedMaxTokens = this.calculateRequestedMaxTokens({
         requestedMaxTokens:
-          typeof maxTokensVal === "number" && maxTokensVal > 0 ? maxTokensVal : DEFAULT_MAX_TOKENS,
+          typeof maxTokensVal === "number" && maxTokensVal > 0
+            ? maxTokensVal
+            : DEFAULT_MAX_OUTPUT_TOKENS,
         modelMaxOutputTokens: effectiveModel.maxOutputTokens,
         contextWindow,
         inputTokenCount,

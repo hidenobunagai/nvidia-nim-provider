@@ -1,27 +1,8 @@
+import { findTrailingTokenPrefixStart } from "./tool-parser";
+
 export interface ThinkTagFilterState {
   insideThinkBlock: boolean;
   pendingText: string;
-}
-
-function findTrailingCaseInsensitivePrefixStart(text: string, token: string): number {
-  const normalizedText = text.toLowerCase();
-  const normalizedToken = token.toLowerCase();
-  const maxPrefixLength = Math.min(normalizedText.length, normalizedToken.length - 1);
-
-  for (let prefixLength = maxPrefixLength; prefixLength > 0; prefixLength -= 1) {
-    if (normalizedText.endsWith(normalizedToken.slice(0, prefixLength))) {
-      return normalizedText.length - prefixLength;
-    }
-  }
-
-  return -1;
-}
-
-/**
- * Strip `<think>...</think>` blocks from streamed text.
- */
-export function stripThinkTags(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, "");
 }
 
 export function filterThinkTagsFromChunk(text: string, state: ThinkTagFilterState): string {
@@ -36,7 +17,7 @@ export function filterThinkTagsFromChunk(text: string, state: ThinkTagFilterStat
     if (state.insideThinkBlock) {
       const closeIndex = remaining.toLowerCase().indexOf(closeTag);
       if (closeIndex === -1) {
-        const partialCloseIndex = findTrailingCaseInsensitivePrefixStart(remaining, closeTag);
+        const partialCloseIndex = findTrailingTokenPrefixStart(remaining.toLowerCase(), closeTag);
         state.pendingText = partialCloseIndex === -1 ? "" : remaining.slice(partialCloseIndex);
         return visibleText;
       }
@@ -48,7 +29,7 @@ export function filterThinkTagsFromChunk(text: string, state: ThinkTagFilterStat
 
     const openIndex = remaining.toLowerCase().indexOf(openTag);
     if (openIndex === -1) {
-      const partialOpenIndex = findTrailingCaseInsensitivePrefixStart(remaining, openTag);
+      const partialOpenIndex = findTrailingTokenPrefixStart(remaining.toLowerCase(), openTag);
       if (partialOpenIndex === -1) {
         visibleText += remaining;
       } else {

@@ -10,7 +10,7 @@ export interface NormalizedNvidiaModel {
 }
 
 const DEFAULT_CONTEXT_WINDOW = 131072;
-const DEFAULT_MAX_OUTPUT_TOKENS = 65536;
+export const DEFAULT_MAX_OUTPUT_TOKENS = 65536;
 const NON_CHAT_MODEL_ID_PATTERNS = [
   // Embedding / rerank / retrieval / parsing / reward / detector families
   /(^|[/_-])bge([-_/]|$)/i,
