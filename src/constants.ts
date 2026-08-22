@@ -7,7 +7,7 @@ export const SECRET_STORAGE_KEY = "nvidia-nim.apiKey";
 export const RAW_MODELS_STATE_KEY = "nvidia-nim.rawModels";
 export const MODELS_STATE_KEY = "nvidia-nim.models";
 export const MODELS_CACHE_VERSION_STATE_KEY = "nvidia-nim.modelsCacheVersion";
-export const MODELS_CACHE_VERSION = 4;
+export const MODELS_CACHE_VERSION = 5;
 export const MIGRATION_DONE_KEY = "nvidia-nim.legacyMigrationDone";
 export const DEBUG_STATE_KEY = "nvidia-nim.debug";
 export const DEBUG_ENV_VAR = "NVIDIA_NIM_DEBUG";
@@ -48,8 +48,8 @@ const THINKING_MODEL_ID_PATTERNS = [
   /(^|[\/_-])deepseek-r1([\/_-]|$)/i,
   // DeepSeek V4 (Flash) exposes visible reasoning through reasoning_content
   /(^|[\/_-])deepseek-v4([\/_-]|$)/i,
-  // Moonshot Kimi K2 / K2.6 native thinking mode
-  /(^|[\/_-])kimi-k2([.\/_-]|$)/i,
+  // Moonshot Kimi K2 / K3 / K2.6 native thinking mode (1M context, vision)
+  /(^|[\/_-])kimi-k\d([.\/_-]|$)/i,
   // Zhipu GLM-5.x reasoning models
   /(^|[\/_-])glm-5([.\/_-]|$)/i,
   // OpenAI GPT-OSS open-weight thinking models
@@ -60,6 +60,8 @@ const THINKING_MODEL_ID_PATTERNS = [
   /(^|[\/_-])nemotron-3([\/_-]|$)/i,
   // Llama 3.3 Nemotron Super 49B (reasoning-tuned)
   /(^|[\/_-])nemotron-super([\/_-]|$)/i,
+  // NVIDIA Cosmos Reason2 VLM (reasoning + vision, Qwen3-VL based)
+  /(^|[\/_-])cosmos-reason\d*([\/_-]|$)/i,
   /(^|[\/_-])qwq([\/_-]|$)/i,
 ];
 

@@ -1,5 +1,17 @@
 # Change Log
 
+## [0.3.2] - 2026-08-22
+
+### Added
+
+- **New NVIDIA catalog models (2026-08-22 live check: 102 models).** Added overrides for 8 models missing from 0.3.1 that the live `/v1/models` endpoint now serves: **Moonshot Kimi K3** (1M context, vision, reasoning — 2.8T MoE, KDA/AttnRes, MoonViT-V2), **NVIDIA Cosmos Reason2 8B** (256K, vision, reasoning — Qwen3-VL-8B based), **Llama 3.2 1B/3B Instruct** (128K), **Llama3 ChatQA 1.5 70B** (8K) and **Writer Palmyra Fin/Med 70B** family (32K/8K). Without overrides these fell back to generic defaults (131K, non-vision) which broke token accounting and vision fallback.
+- **Thinking model coverage:** `THINKING_MODELS` now matches `kimi-k\d` (covers K2, K2.6, K3) and `cosmos-reason*` so Kimi K3 and Cosmos Reason2 get the 16K output-budget floor and reasoning-only silent retries.
+
+### Changed
+
+- Bumped `MODELS_CACHE_VERSION` 4 → 5 so existing installs refresh their cached catalog and pick up the 8 new overrides.
+- Docs: updated `docs/models.md` (new overrides table rows + reasoning families) for the current live catalog. Verified stale overrides (21 models no longer served, e.g. `z-ai/glm-5.2`, `deepseek-r1`, `anthropic/claude-*`) are retained for older accounts.
+
 ## [0.3.1] - 2026-08-15
 
 ### Changed

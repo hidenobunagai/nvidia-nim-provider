@@ -119,6 +119,14 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
     displayName: "Llama 3.1 8B Instruct",
     contextWindow: 131072,
   },
+  "meta/llama-3.2-1b-instruct": {
+    displayName: "Llama 3.2 1B Instruct",
+    contextWindow: 131072,
+  },
+  "meta/llama-3.2-3b-instruct": {
+    displayName: "Llama 3.2 3B Instruct",
+    contextWindow: 131072,
+  },
   "meta/llama-3.2-11b-vision-instruct": {
     displayName: "Llama 3.2 11B Vision Instruct",
     contextWindow: 131072,
@@ -202,6 +210,11 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
     displayName: "Kimi K2.6",
     contextWindow: 262144,
   },
+  "moonshotai/kimi-k3": {
+    displayName: "Kimi K3",
+    contextWindow: 1048576,
+    supportsVision: true,
+  },
   "nv-mistralai/mistral-nemo-12b-instruct": {
     displayName: "Mistral NeMo 12B Instruct",
     contextWindow: 131072,
@@ -235,6 +248,15 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   "nvidia/llama-3.3-nemotron-super-49b-v1.5": {
     displayName: "Llama 3.3 Nemotron Super 49B V1.5",
     contextWindow: 131072,
+  },
+  "nvidia/cosmos-reason2-8b": {
+    displayName: "Cosmos Reason2 8B",
+    contextWindow: 262144,
+    supportsVision: true,
+  },
+  "nvidia/llama3-chatqa-1.5-70b": {
+    displayName: "Llama3 ChatQA 1.5 70B",
+    contextWindow: 8192,
   },
   "nvidia/mistral-nemo-minitron-8b-8k-instruct": {
     displayName: "Mistral NeMo Minitron 8B 8K Instruct",
@@ -319,6 +341,18 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "writer/palmyra-creative-122b": {
     displayName: "Palmyra Creative 122B",
+  },
+  "writer/palmyra-fin-70b-32k": {
+    displayName: "Palmyra Fin 70B 32K",
+    contextWindow: 32768,
+  },
+  "writer/palmyra-med-70b": {
+    displayName: "Palmyra Med 70B",
+    contextWindow: 8192,
+  },
+  "writer/palmyra-med-70b-32k": {
+    displayName: "Palmyra Med 70B 32K",
+    contextWindow: 32768,
   },
   "z-ai/glm-5.2": {
     displayName: "GLM 5.2",

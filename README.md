@@ -36,8 +36,8 @@ NVIDIA NIM models. The VS Code model settings flow is recommended for new setups
 
 The extension dynamically fetches available models from `https://integrate.api.nvidia.com/v1/models`.
 It does not ship a hardcoded fallback model catalog; the Copilot Chat model picker shows the models
-returned by your NVIDIA NIM account (DeepSeek V4 Flash, Kimi K2.6, GLM 5.2, GPT-OSS, Nemotron 3,
-Llama 3.3, Gemma 4, Muse Glimmer, and more).
+returned by your NVIDIA NIM account (DeepSeek V4 Flash, **Kimi K3** / K2.6, **Cosmos Reason2 8B**, GLM 5.2, GPT-OSS, Nemotron 3,
+Llama 3.3/3.2, Gemma 4, Muse Glimmer, Llama3 ChatQA, Palmyra, and more — 102 models live as of 2026-08-22).
 
 Because the NVIDIA `/models` response currently omits capability metadata (context window, vision,
 tool calling), the extension ships a static override table (`src/model-catalog.ts`) that fills in
@@ -48,7 +48,7 @@ non-chat catalog entries (embedding, rerank, guard/safety, base/completion, tran
 filtered out of the picker. Non-chat model ids are re-checked whenever the catalog changes, so the
 filter stays in sync with the live catalog (see `docs/models.md` for details).
 
-Reasoning models (DeepSeek R1/V4, Kimi K2.6, GLM 5.2, GPT-OSS, MiniMax M3, Nemotron 3, Nemotron
+Reasoning models (DeepSeek R1/V4, Kimi K3/K2.6, Cosmos Reason2, GLM 5.2, GPT-OSS, MiniMax M3, Nemotron 3, Nemotron
 Super, QwQ) get a minimum output budget floor and silent retries so long thinking steps cannot
 truncate the visible response.
 

@@ -35,6 +35,9 @@ when the API omits metadata:
 |----------|--------------|-------|
 | `deepseek-ai/deepseek-v4-flash-0731` | DeepSeek V4 Flash 0731 | 128K context |
 | `moonshotai/kimi-k2.6` | Kimi K2.6 | 256K context |
+| `moonshotai/kimi-k3` | Kimi K3 | 1M context, vision, reasoning |
+| `nvidia/cosmos-reason2-8b` | Cosmos Reason2 8B | 256K context, vision, reasoning |
+| `meta/llama-3.2-1b-instruct` / `llama-3.2-3b-instruct` | Llama 3.2 1B / 3B Instruct | 128K context |
 | `z-ai/glm-5.2` | GLM 5.2 | |
 | `openai/gpt-oss-120b` / `openai/gpt-oss-20b` | GPT-OSS 120B / 20B | |
 | `minimaxai/minimax-m3` | MiniMax M3 | 256K context |
@@ -51,6 +54,8 @@ when the API omits metadata:
 | `nvidia/nemotron-nano-12b-v2-vl` | Nemotron Nano 12B V2 VL | vision |
 | `nvidia/nvidia-nemotron-nano-9b-v2` / `nemotron-nano-3-30b-a3b` / `nemotron-mini-4b-instruct` | NVIDIA Nemotron Nano / Mini family | |
 | `nvidia/vila` / `nvidia/neva-22b` / `microsoft/phi-3-vision-128k-instruct` | VILA / NeVA 22B / Phi 3 Vision | vision |
+| `nvidia/llama3-chatqa-1.5-70b` | Llama3 ChatQA 1.5 70B | 8K context |
+| `writer/palmyra-fin-70b-32k` / `palmyra-med-70b` / `palmyra-med-70b-32k` | Palmyra Fin/Med 70B | 32K / 8K context |
 | `adept/fuyu-8b` / `google/deplot` / `microsoft/kosmos-2` | Fuyu 8B / DePlot / Kosmos 2 | vision, non-tool |
 | `mistralai/mistral-large-2-instruct` / `mistral-nemotron` / `mistral-nemo-12b-instruct` | Mistral Large 2 / Mistral Nemotron / Mistral NeMo | |
 | `mistralai/mixtral-8x22b-v0.1` / `codestral-22b-instruct-v0.1` | Mixtral 8x22B / Codestral 22B | |
@@ -101,7 +106,8 @@ Currently recognized reasoning families:
 |--------|-------------------|
 | DeepSeek R1 | `deepseek-ai/deepseek-r1` |
 | DeepSeek V4 | `deepseek-ai/deepseek-v4-*` (e.g. `deepseek-v4-flash-0731`) |
-| Kimi K2 / K2.6 | `moonshotai/kimi-k2*` |
+| Kimi K2 / K3 | `moonshotai/kimi-k\d*` (K2, K2.6, K3) |
+| Cosmos Reason | `nvidia/cosmos-reason*` |
 | GLM 5.x | `z-ai/glm-5*` |
 | GPT-OSS | `openai/gpt-oss-*` |
 | MiniMax M3 | `minimaxai/minimax-m3` |
