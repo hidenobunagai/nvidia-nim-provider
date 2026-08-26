@@ -68,7 +68,8 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "deepseek-ai/deepseek-v4-flash-0731": {
     displayName: "DeepSeek V4 Flash 0731",
-    contextWindow: 131072,
+    contextWindow: 1000000,
+    maxOutputTokens: 384000,
   },
   "google/deplot": {
     displayName: "DePlot",
@@ -90,6 +91,8 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   "google/gemma-3-4b-it": {
     displayName: "Gemma 3 4B IT",
     contextWindow: 131072,
+    maxOutputTokens: 16384,
+    supportsVision: true,
   },
   "google/gemma-4-31b-it": {
     displayName: "Gemma 4 31B IT",
@@ -113,11 +116,13 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "meta/llama-3.1-70b-instruct": {
     displayName: "Llama 3.1 70B Instruct",
-    contextWindow: 131072,
+    contextWindow: 128000,
+    maxOutputTokens: 4096,
   },
   "meta/llama-3.1-8b-instruct": {
     displayName: "Llama 3.1 8B Instruct",
     contextWindow: 131072,
+    maxOutputTokens: 4096,
   },
   "meta/llama-3.2-1b-instruct": {
     displayName: "Llama 3.2 1B Instruct",
@@ -129,17 +134,20 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "meta/llama-3.2-11b-vision-instruct": {
     displayName: "Llama 3.2 11B Vision Instruct",
-    contextWindow: 131072,
+    contextWindow: 128000,
+    maxOutputTokens: 4096,
     supportsVision: true,
   },
   "meta/llama-3.2-90b-vision-instruct": {
     displayName: "Llama 3.2 90B Vision Instruct",
-    contextWindow: 131072,
+    contextWindow: 128000,
+    maxOutputTokens: 8192,
     supportsVision: true,
   },
   "meta/llama-3.3-70b-instruct": {
     displayName: "Llama 3.3 70B Instruct",
-    contextWindow: 131072,
+    contextWindow: 128000,
+    maxOutputTokens: 4096,
   },
   "meta/llama-4-maverick-17b-128e-instruct": {
     displayName: "Llama 4 Maverick 17B 128E Instruct",
@@ -150,6 +158,8 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   "meta/muse-glimmer-30b": {
     displayName: "Muse Glimmer 30B",
     contextWindow: 131072,
+    maxOutputTokens: 131072,
+    supportsVision: true,
   },
   "microsoft/kosmos-2": {
     displayName: "Kosmos 2",
@@ -176,7 +186,9 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "minimaxai/minimax-m3": {
     displayName: "MiniMax M3",
-    contextWindow: 262144,
+    contextWindow: 1000000,
+    maxOutputTokens: 16384,
+    supportsVision: true,
   },
   "mistralai/codestral-22b-instruct-v0.1": {
     displayName: "Codestral 22B Instruct",
@@ -184,6 +196,7 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "mistralai/mistral-7b-instruct-v0.3": {
     displayName: "Mistral 7B Instruct",
+    contextWindow: 65536,
   },
   "mistralai/mistral-large": {
     displayName: "Mistral Large",
@@ -209,10 +222,13 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   "moonshotai/kimi-k2.6": {
     displayName: "Kimi K2.6",
     contextWindow: 262144,
+    maxOutputTokens: 262144,
+    supportsVision: true,
   },
   "moonshotai/kimi-k3": {
     displayName: "Kimi K3",
     contextWindow: 1048576,
+    maxOutputTokens: 131072,
     supportsVision: true,
   },
   "nv-mistralai/mistral-nemo-12b-instruct": {
@@ -225,18 +241,24 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "nvidia/llama-3.1-nemotron-70b-instruct": {
     displayName: "Llama 3.1 Nemotron 70B Instruct",
+    contextWindow: 128000,
+    maxOutputTokens: 8192,
   },
   "nvidia/llama-3.1-nemotron-nano-8b-v1": {
     displayName: "Llama 3.1 Nemotron Nano 8B V1",
     contextWindow: 131072,
+    maxOutputTokens: 16384,
   },
   "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": {
     displayName: "Llama 3.1 Nemotron Nano VL 8B V1",
-    contextWindow: 131072,
+    contextWindow: 32768,
+    maxOutputTokens: 16384,
     supportsVision: true,
   },
   "nvidia/llama-3.1-nemotron-ultra-253b-v1": {
     displayName: "Llama 3.1 Nemotron Ultra 253B",
+    contextWindow: 128000,
+    maxOutputTokens: 16384,
   },
   "nvidia/llama-3.1-nemotron-ultra-253b-v1:awq-moe": {
     displayName: "Llama 3.1 Nemotron Ultra 253B (AWQ MoE)",
@@ -252,6 +274,7 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   "nvidia/cosmos-reason2-8b": {
     displayName: "Cosmos Reason2 8B",
     contextWindow: 262144,
+    maxOutputTokens: 16384,
     supportsVision: true,
   },
   "nvidia/llama3-chatqa-1.5-70b": {
@@ -265,23 +288,26 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   "nvidia/nemotron-3-nano-30b-a3b": {
     displayName: "Nemotron 3 Nano 30B A3B",
     contextWindow: 131072,
+    maxOutputTokens: 131072,
   },
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
     displayName: "Nemotron 3 Nano Omni 30B A3B Reasoning",
-    contextWindow: 131072,
+    contextWindow: 256000,
     supportsVision: true,
   },
   "nvidia/nemotron-3-super-120b-a12b": {
     displayName: "Nemotron 3 Super 120B A12B",
-    contextWindow: 131072,
+    contextWindow: 262144,
+    maxOutputTokens: 262144,
   },
   "nvidia/nemotron-3-ultra-550b-a55b": {
     displayName: "Nemotron 3 Ultra 550B A55B",
-    contextWindow: 131072,
+    contextWindow: 1000000,
   },
   "nvidia/nemotron-3.5-lightning-30b-a3b": {
     displayName: "Nemotron 3.5 Lightning 30B A3B",
-    contextWindow: 131072,
+    contextWindow: 262144,
+    maxOutputTokens: 262144,
   },
   "nvidia/nemotron-4-340b-instruct": {
     displayName: "Nemotron 4 340B Instruct",
@@ -291,7 +317,8 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "nvidia/nemotron-nano-12b-v2-vl": {
     displayName: "Nemotron Nano 12B V2 VL",
-    contextWindow: 131072,
+    contextWindow: 128000,
+    maxOutputTokens: 128000,
     supportsVision: true,
   },
   "nvidia/nemotron-nano-3-30b-a3b": {
@@ -305,6 +332,7 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   "nvidia/nvidia-nemotron-nano-9b-v2": {
     displayName: "NVIDIA Nemotron Nano 9B V2",
     contextWindow: 131072,
+    maxOutputTokens: 131072,
   },
   "nvidia/vila": {
     displayName: "VILA",
@@ -316,13 +344,16 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   "openai/gpt-oss-20b": {
     displayName: "GPT-OSS 20B",
     contextWindow: 131072,
+    maxOutputTokens: 32768,
   },
   "openai/gpt-oss-120b": {
     displayName: "GPT-OSS 120B",
-    contextWindow: 131072,
+    contextWindow: 128000,
   },
   "poolside/laguna-xs-2.1": {
     displayName: "Laguna XS 2.1",
+    contextWindow: 262144,
+    maxOutputTokens: 16384,
   },
   "qwen/qwen2.5-72b-instruct": {
     displayName: "Qwen 2.5 72B Instruct",
@@ -335,9 +366,15 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
   },
   "stepfun-ai/step-3.7-flash": {
     displayName: "Step 3.7 Flash",
+    contextWindow: 256000,
+    maxOutputTokens: 16384,
+    supportsVision: true,
   },
   "thinkingmachines/inkling": {
     displayName: "Inkling",
+    contextWindow: 1048576,
+    maxOutputTokens: 16384,
+    supportsVision: true,
   },
   "writer/palmyra-creative-122b": {
     displayName: "Palmyra Creative 122B",

@@ -33,14 +33,14 @@ when the API omits metadata:
 
 | Model ID | Display Name | Notes |
 |----------|--------------|-------|
-| `deepseek-ai/deepseek-v4-flash-0731` | DeepSeek V4 Flash 0731 | 128K context |
+| `deepseek-ai/deepseek-v4-flash-0731` | DeepSeek V4 Flash 0731 | 1M context |
 | `moonshotai/kimi-k2.6` | Kimi K2.6 | 256K context |
 | `moonshotai/kimi-k3` | Kimi K3 | 1M context, vision, reasoning |
 | `nvidia/cosmos-reason2-8b` | Cosmos Reason2 8B | 256K context, vision, reasoning |
 | `meta/llama-3.2-1b-instruct` / `llama-3.2-3b-instruct` | Llama 3.2 1B / 3B Instruct | 128K context |
 | `z-ai/glm-5.2` | GLM 5.2 | |
 | `openai/gpt-oss-120b` / `openai/gpt-oss-20b` | GPT-OSS 120B / 20B | |
-| `minimaxai/minimax-m3` | MiniMax M3 | 256K context |
+| `minimaxai/minimax-m3` | MiniMax M3 | 1M context |
 | `meta/muse-glimmer-30b` | Muse Glimmer 30B | |
 | `google/gemma-4-31b-it` / `gemma-3-4b-it` | Gemma 4 31B IT / Gemma 3 4B IT | |
 | `meta/llama-3.3-70b-instruct` / `llama-3.1-70b-instruct` / `llama-3.1-8b-instruct` | Llama 3.3/3.1 Instruct | |

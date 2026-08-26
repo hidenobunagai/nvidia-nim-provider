@@ -42,7 +42,7 @@ describe("normalizeNvidiaModels", () => {
         id: "meta/llama-3.1-8b-instruct",
         displayName: "Llama 3.1 8B Instruct",
         contextWindow: 131072,
-        maxOutputTokens: 65536,
+        maxOutputTokens: 4096,
         supportsTools: true,
         supportsVision: false,
       },
@@ -137,7 +137,7 @@ describe("normalizeNvidiaModels", () => {
         id: "moonshotai/kimi-k2.6",
         displayName: "Kimi K2.6",
         contextWindow: 262144,
-        supportsVision: false,
+        supportsVision: true,
       }),
       expect.objectContaining({
         id: "meta/llama-3.2-11b-vision-instruct",
@@ -152,7 +152,7 @@ describe("normalizeNvidiaModels", () => {
       expect.objectContaining({
         id: "deepseek-ai/deepseek-v4-flash-0731",
         displayName: "DeepSeek V4 Flash 0731",
-        contextWindow: 131072,
+        contextWindow: 1000000,
       }),
       expect.objectContaining({
         id: "nvidia/nemotron-3-ultra-550b-a55b",

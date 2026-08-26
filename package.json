@@ -130,7 +130,9 @@
     "lint": "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "package:vsix": "bun run compile && vsce package --allow-missing-repository"
+    "package:vsix": "bun run compile && vsce package --allow-missing-repository",
+    "sync:pi": "bun scripts/sync-from-pi.ts",
+    "sync:pi:write": "bun scripts/sync-from-pi.ts --write"
   },
   "devDependencies": {
     "@types/jest": "^29.0.0",

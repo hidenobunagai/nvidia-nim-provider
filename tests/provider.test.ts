@@ -178,7 +178,7 @@ describe("NvidiaNimChatModelProvider", () => {
         id: "meta/llama-3.1-8b-instruct",
         displayName: "Llama 3.1 8B Instruct",
         contextWindow: 131072,
-        maxOutputTokens: 65536,
+        maxOutputTokens: 4096,
         supportsTools: true,
         supportsVision: false,
       },
