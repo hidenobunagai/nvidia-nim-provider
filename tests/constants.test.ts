@@ -38,6 +38,6 @@ describe("THINKING_MODELS", () => {
 
 describe("MODELS_CACHE_VERSION", () => {
   it("is the current cache schema version", () => {
-    expect(MODELS_CACHE_VERSION).toBe(5);
+    expect(MODELS_CACHE_VERSION).toBe(6);
   });
 });

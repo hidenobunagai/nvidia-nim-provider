@@ -1,5 +1,17 @@
 # Change Log
 
+## [0.3.3] - 2026-08-26
+
+### Added
+
+- **Pi sync script.** `scripts/sync-from-pi.ts` pulls the NVIDIA model table from Pi (`@earendil-works/pi-ai`'s `nvidia.json`, local install → CDN fallback) and checks it against `KNOWN_MODEL_OVERRIDES`. `bun run sync:pi` reports drift (exits 1, wired into CI), `bun run sync:pi:write` applies it. Pi-only values are rejected per-model via the `IGNORED` table (3 seeded: llama-3.1-8b ctx typo, gpt-oss-120b output cap below the 16K reasoning floor, cosmos-reason2-8b ctx — NVIDIA documents 256K).
+
+### Changed
+
+- **Catalog refreshed from Pi (50 field updates across 32 models):** `deepseek-ai/deepseek-v4-flash-0731` now 1M context / 384K max output (was 128K), `minimaxai/minimax-m3` 1M context, Llama 3.1/3.2/3.3 family 128K, vision flags for Kimi K2.6, MiniMax M3, Muse Glimmer, Gemma 3 4B/12B, Step 3.7 Flash, Inkling; per-model `maxOutputTokens` throughout (e.g. Llama 3.1 4K–8K, Kimi K2.6 256K, Nemotron 3 Super 256K).
+- Bumped `MODELS_CACHE_VERSION` 5 → 6 so existing installs refresh their cached catalog.
+- CI: `bun run sync:pi` drift check added (fails the build when the override table falls out of sync with Pi).
+
 ## [0.3.2] - 2026-08-22
 
 ### Added

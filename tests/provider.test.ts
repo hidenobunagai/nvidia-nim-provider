@@ -239,7 +239,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 5;
+        return 6;
       }
       return undefined;
     });
@@ -273,7 +273,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 5;
+        return 6;
       }
       return undefined;
     });
@@ -339,7 +339,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 5;
+        return 6;
       }
       return undefined;
     });
@@ -385,7 +385,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 5;
+        return 6;
       }
       return undefined;
     });
@@ -425,7 +425,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 5;
+        return 6;
       }
       return undefined;
     });
@@ -465,7 +465,7 @@ describe("NvidiaNimChatModelProvider", () => {
         ];
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 5;
+        return 6;
       }
       return undefined;
     });
@@ -589,7 +589,7 @@ describe("NvidiaNimChatModelProvider", () => {
         return cachedModels;
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 5;
+        return 6;
       }
       return undefined;
     });
@@ -661,7 +661,7 @@ describe("NvidiaNimChatModelProvider", () => {
         return cachedModels;
       }
       if (key === "nvidia-nim.modelsCacheVersion") {
-        return 5;
+        return 6;
       }
       return undefined;
     });
