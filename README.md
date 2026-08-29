@@ -83,6 +83,8 @@ Press `F5` in VS Code to launch the Extension Development Host.
 
 ## Documentation
 
+[![NVIDIA NIM Provider architecture diagram](docs/architecture.visual-check.1440x900.light.png)](docs/architecture.html)
+
 - [Interactive Architecture Diagram](docs/architecture.html) — explorable runtime map with source references, guided views, and theme switching
 - [Architecture](docs/architecture.md) — module map, data flow, retry and error handling
 - [Model Reference](docs/models.md) — model discovery, capability normalization, family adapters, and known quirks/workarounds
