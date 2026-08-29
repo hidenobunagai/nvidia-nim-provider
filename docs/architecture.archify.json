@@ -1,0 +1,306 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "NVIDIA NIM Provider Architecture",
+    "locale": "en",
+    "output": "docs/architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/hidenobunagai/nvidia-nim-provider.git",
+      "revision": "7c86146ff381a75edbba3bfd4fe6da085e65b601"
+    },
+    "views": [
+      {
+        "id": "chat-path",
+        "label": "Chat request path",
+        "focus": ["copilot", "provider", "conversion", "transport", "nim", "stream"],
+        "note": "Follow a Copilot Chat request through conversion, the OpenAI-compatible API, and streamed output."
+      },
+      {
+        "id": "model-discovery",
+        "label": "Model discovery",
+        "focus": ["provider", "catalog", "transport", "nim"],
+        "note": "See how the live model list becomes cached, capability-aware picker entries."
+      },
+      {
+        "id": "vision-and-tools",
+        "label": "Vision and tools",
+        "focus": ["provider", "tools", "stream", "nim"],
+        "note": "Trace native or repaired tool calls and the vision fallback path."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "copilot",
+      "type": "frontend",
+      "label": "GitHub Copilot Chat",
+      "sublabel": "VS Code model picker + chat",
+      "pos": [40, 330],
+      "size": [180, 72],
+      "sources": [
+        { "path": "README.md", "line": 3, "end_line": 3, "label": "extension role" },
+        { "path": "README.md", "line": 55, "end_line": 59, "label": "usage" }
+      ]
+    },
+    {
+      "id": "extension",
+      "type": "backend",
+      "label": "Extension activation",
+      "sublabel": "register provider, tools, commands",
+      "pos": [280, 115],
+      "size": [190, 68],
+      "sources": [
+        { "path": "src/extension.ts", "line": 146, "end_line": 171, "label": "activate" }
+      ]
+    },
+    {
+      "id": "provider",
+      "type": "backend",
+      "label": "NvidiaNimChatModelProvider",
+      "sublabel": "LanguageModelChatProvider",
+      "pos": [280, 330],
+      "size": [190, 72],
+      "sources": [
+        { "path": "src/provider.ts", "line": 136, "end_line": 165, "label": "provider" },
+        { "path": "src/provider.ts", "line": 539, "end_line": 672, "label": "request" }
+      ]
+    },
+    {
+      "id": "secrets",
+      "type": "security",
+      "label": "API key storage",
+      "sublabel": "SecretStorage + provider group",
+      "pos": [280, 555],
+      "size": [190, 68],
+      "sources": [
+        { "path": "src/provider.ts", "line": 709, "end_line": 742, "label": "ensure key" },
+        { "path": "src/extension.ts", "line": 173, "end_line": 200, "label": "manage key" }
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "database",
+      "label": "Model catalog cache",
+      "sublabel": "globalState / normalized capabilities",
+      "pos": [515, 115],
+      "size": [205, 68],
+      "sources": [
+        { "path": "src/model-catalog.ts", "line": 3, "end_line": 10, "label": "normalized model" },
+        { "path": "src/extension.ts", "line": 88, "end_line": 107, "label": "cache update" }
+      ]
+    },
+    {
+      "id": "conversion",
+      "type": "backend",
+      "label": "Request preparation",
+      "sublabel": "OpenAI conversion + family adapters",
+      "pos": [515, 330],
+      "size": [205, 72],
+      "sources": [
+        { "path": "src/openai-conversion.ts", "line": 151, "end_line": 275, "label": "convert messages" },
+        { "path": "src/adapters/index.ts", "line": 144, "end_line": 170, "label": "profiles" }
+      ]
+    },
+    {
+      "id": "tools",
+      "type": "backend",
+      "label": "Tool bridge",
+      "sublabel": "Language Model Tool + image analysis",
+      "pos": [515, 555],
+      "size": [205, 68],
+      "sources": [
+        { "path": "src/tools.ts", "line": 84, "end_line": 91, "label": "register tool" },
+        { "path": "src/mcp.ts", "line": 44, "end_line": 89, "label": "vision client" }
+      ]
+    },
+    {
+      "id": "transport",
+      "type": "backend",
+      "label": "NVIDIA NIM transport",
+      "sublabel": "retrying HTTP + SSE reader",
+      "pos": [770, 330],
+      "size": [205, 72],
+      "sources": [
+        { "path": "src/api.ts", "line": 65, "end_line": 103, "label": "retry" },
+        { "path": "src/api.ts", "line": 137, "end_line": 159, "label": "chat stream" }
+      ]
+    },
+    {
+      "id": "stream",
+      "type": "backend",
+      "label": "Stream + tool pipeline",
+      "sublabel": "SSE → text, reasoning, tool calls",
+      "pos": [1000, 555],
+      "size": [215, 72],
+      "sources": [
+        { "path": "src/streaming/openai.ts", "line": 198, "end_line": 273, "label": "stream process" },
+        { "path": "src/streaming/shared.ts", "line": 151, "end_line": 238, "label": "emit parts" },
+        { "path": "src/tool-parser.ts", "line": 217, "end_line": 320, "label": "embedded calls" }
+      ]
+    },
+    {
+      "id": "nim",
+      "type": "external",
+      "label": "NVIDIA NIM API",
+      "sublabel": "integrate.api.nvidia.com/v1",
+      "pos": [1040, 330],
+      "size": [220, 72],
+      "sources": [
+        { "path": "README.md", "line": 37, "end_line": 38, "label": "live discovery" },
+        { "path": "docs/architecture.md", "line": 81, "end_line": 83, "label": "API format" }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "VS Code Extension Host",
+      "wraps": ["extension", "provider", "secrets", "catalog", "conversion", "tools", "transport", "stream"],
+      "pad": 26
+    }
+  ],
+  "connections": [
+    {
+      "id": "copilot-provider",
+      "from": "copilot",
+      "to": "provider",
+      "label": "Language Model API",
+      "variant": "emphasis",
+      "labelAt": [250, 300]
+    },
+    {
+      "id": "activation-provider",
+      "from": "extension",
+      "to": "provider",
+      "label": "register provider",
+      "variant": "dashed",
+      "labelAt": [375, 220]
+    },
+    {
+      "id": "provider-secrets",
+      "from": "provider",
+      "to": "secrets",
+      "label": "read / store key",
+      "variant": "security",
+      "labelAt": [375, 450]
+    },
+    {
+      "id": "provider-catalog",
+      "from": "provider",
+      "to": "catalog",
+      "label": "normalize + cache",
+      "variant": "dashed"
+    },
+    {
+      "id": "provider-models",
+      "from": "provider",
+      "to": "transport",
+      "label": "GET /v1/models",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "top",
+      "via": [[375, 260], [872.5, 260]]
+    },
+    {
+      "id": "provider-conversion",
+      "from": "provider",
+      "to": "conversion",
+      "label": "prepare chat turn",
+      "variant": "emphasis",
+      "labelAt": [590, 300]
+    },
+    {
+      "id": "conversion-transport",
+      "from": "conversion",
+      "to": "transport",
+      "label": "POST /v1/chat/completions",
+      "variant": "emphasis",
+      "labelAt": [745, 300]
+    },
+    {
+      "id": "transport-nim",
+      "from": "transport",
+      "to": "nim",
+      "label": "HTTPS + Bearer auth",
+      "variant": "security",
+      "labelAt": [1008, 300]
+    },
+    {
+      "id": "nim-stream",
+      "from": "nim",
+      "to": "stream",
+      "label": "SSE chunks",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "top",
+      "via": [[990, 366], [990, 510], [1107.5, 510]]
+    },
+    {
+      "id": "stream-copilot",
+      "from": "stream",
+      "to": "copilot",
+      "label": "LanguageModelResponsePart[]",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [[1300, 591], [1300, 70], [130, 70]],
+      "labelAt": [715, 70]
+    },
+    {
+      "id": "provider-tools",
+      "from": "provider",
+      "to": "tools",
+      "label": "vision fallback / tool bridge",
+      "variant": "dashed"
+    },
+    {
+      "id": "stream-tools",
+      "from": "stream",
+      "to": "tools",
+      "label": "LanguageModelToolCallPart",
+      "variant": "dashed",
+      "labelAt": [800, 540]
+    },
+    {
+      "id": "tools-nim",
+      "from": "tools",
+      "to": "nim",
+      "label": "POST /chat/completions (vision)",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [[900, 589], [900, 450], [1150, 450]]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Request path",
+      "items": [
+        "Copilot Chat calls provideLanguageModelChatResponse",
+        "Messages are converted to the OpenAI-compatible request format",
+        "api.ts handles retries, timeouts, and SSE assembly"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Model discovery",
+      "items": [
+        "GET /models is normalized into capability-aware entries",
+        "globalState caches normalized models and the cache version",
+        "The model picker receives selectable chat metadata"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Tools and resilience",
+      "items": [
+        "Native and text-embedded tool calls are repaired and deduplicated",
+        "Non-vision models use a cached vision model or image-analysis tool",
+        "Silent retries cover rate limits, stalls, truncation, and missing tool calls"
+      ]
+    }
+  ]
+}
