@@ -5,7 +5,7 @@
   "status": "pass",
   "visualReview": "pending",
   "artifact": {
-    "path": "/home/pi/projects/nvidia-nim-provider/docs/architecture.html",
+    "path": "docs/architecture.html",
     "sha256": "c0a2676c35c0778ba26d6783addb15b03fda6c92bba214b444c3e6149587212c",
     "bytes": 724912
   },
@@ -14,8 +14,7 @@
     "motion": "still"
   },
   "chrome": {
-    "status": "available",
-    "executable": "/usr/bin/chromium"
+    "status": "available"
   },
   "diagnostics": [],
   "containment": {
