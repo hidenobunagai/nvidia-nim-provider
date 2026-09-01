@@ -28,6 +28,9 @@
   "engines": {
     "vscode": "^1.104.0"
   },
+  "enabledApiProposals": [
+    "chatProvider"
+  ],
   "categories": [
     "AI",
     "Chat"
