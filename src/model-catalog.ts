@@ -71,6 +71,11 @@ const KNOWN_MODEL_OVERRIDES: Record<string, Partial<NormalizedNvidiaModel>> = {
     contextWindow: 1000000,
     maxOutputTokens: 384000,
   },
+  "deepseek-ai/deepseek-v4-pro-0813": {
+    displayName: "DeepSeek V4 Pro 0813",
+    contextWindow: 1000000,
+    maxOutputTokens: 384000,
+  },
   "google/deplot": {
     displayName: "DePlot",
     supportsVision: true,
