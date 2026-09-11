@@ -1,12 +1,11 @@
-# Draft: periodic model-catalog sync from Pi AI.
-# Runs the existing `sync:pi` (check) daily; if Pi data drifted from the bundled
-# catalog, applies `--write` and opens a PR for human review + publish.
-# Conservative: PR-only, no auto `vsce publish` (no VSCE_PAT in scope yet).
-name: Periodic Pi Sync
+# Manual-only model-catalog sync from Pi AI: runs `sync:pi` (check) and, on drift,
+# applies `--write` and opens a PR for review.
+# The automatic daily watch now runs on homepi (DSH headless agent, systemd user
+# timer `daily-pi-provider-sync.timer`), which publishes directly, so the schedule
+# is deliberately absent here — a second automatic path would open duplicate PRs.
+name: Pi Sync (manual)
 
 on:
-  schedule:
-    - cron: '37 6 * * *'        # daily 06:37 UTC, off-peak
   workflow_dispatch: {}        # manual trigger from the Actions tab
 
 concurrency:
