@@ -1,5 +1,14 @@
 # Contributing
 
+> [!NOTE]
+> **Maintenance status: as-is, no support.** This is a personal project. I do not provide setup or
+> usage help, and issues and pull requests may be read, ignored, or closed without a reply —
+> sometimes for months. Silence is not a decision. Forking is the intended path (MIT).
+> Security issues: put `security` in the title.
+>
+> Everything below is setup, testing, and release notes — mainly for my own use, and for anyone
+> who forks.
+
 ## Prerequisites
 
 - [Bun](https://bun.sh/) ≥ 1.2 (package manager & runtime)

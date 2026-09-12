@@ -2,6 +2,11 @@
 
 VS Code extension that adds an NVIDIA NIM provider to Copilot Chat.
 
+> [!NOTE]
+> **Maintenance status: as-is, no support.** A personal project, published because it is useful —
+> not a product. Issues and pull requests may be read, ignored, or closed without a reply.
+> Forking is the intended path. Details: [docs/contributing.md](docs/contributing.md).
+
 ## Requirements
 
 - VS Code 1.104.0 or later
