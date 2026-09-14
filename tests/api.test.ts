@@ -119,7 +119,13 @@ describe("fetchModels", () => {
   });
 
   it("parses Retry-After as HTTP-date format", async () => {
-    const retryDate = new Date(Date.now() + 100).toUTCString();
+    // Freeze the client clock so the parsed HTTP-date is guaranteed to be ahead of it.
+    // HTTP-date only carries second precision, so against a real clock "+1000 ms" is
+    // sometimes rounded into the past, which takes the exponential-backoff path instead
+    // and flipped getRetryAfterMs' branch coverage between runs (74.57 <-> 75.75%).
+    const now = Date.now();
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const retryDate = new Date(now + 1000).toUTCString();
     global.fetch = jest
       .fn()
       .mockResolvedValueOnce({
@@ -137,6 +143,25 @@ describe("fetchModels", () => {
     expect(result).toEqual(rawModelSummaries);
     expect(fetch).toHaveBeenCalledTimes(2);
   }, 10000);
+
+  it("falls back to exponential backoff when the Retry-After date is already past", async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: new Headers({ "retry-after": new Date(Date.now() - 10000).toUTCString() }),
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: rawModelSummaries }),
+      } as any);
+
+    const result = await fetchModels("test-key");
+    expect(result).toEqual(rawModelSummaries);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
 
   it("falls back to exponential backoff when Retry-After is unparseable", async () => {
     global.fetch = jest
