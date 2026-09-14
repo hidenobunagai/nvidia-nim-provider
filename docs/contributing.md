@@ -43,10 +43,10 @@ bun run test:coverage     # Run tests with coverage report
 
 Test files live in `tests/` and mirror the `src/` structure:
 - `tests/api.test.ts` — API client, retry logic, and SSE streaming
-- `tests/provider.test.ts` — Provider lifecycle, model discovery, streaming, and retry paths
+- `tests/provider.test.ts` — Provider lifecycle, model discovery, streaming, retry paths, and tool
+  argument repair/dedup
 - `tests/announcement.test.ts` — Action-announcement detection and nudge text
 - `tests/guidance.test.ts` — System prompt sanitization and guidance
-- `tests/tool-repair.test.ts` — Tool argument repair and dedup
 - `tests/model-catalog.test.ts` — Model normalization and capability inference
 - `tests/mcp.test.ts` — Vision MCP client integration
 - `tests/tools.test.ts` — Language model tool registration
