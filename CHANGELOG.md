@@ -1,5 +1,26 @@
 # Change Log
 
+## [0.3.4] - 2026-09-15
+
+### Added
+
+- **Automated publishing.** `.github/workflows/publish.yml` compiles the extension, packages the VSIX and publishes to the VS Code Marketplace on every `v*` tag push; manual runs only validate the build. No Open VSX step — the extension only registers a `languageModelChatProviders` entry, and Copilot Chat does not exist in the editors Open VSX serves.
+- **Pi Sync (manual) workflow.** `.github/workflows/sync-cron.yml` runs the `sync:pi` drift check on demand and, when the catalog has drifted, applies `--write` and opens a PR for review. The redundant `issues:write` permission was dropped during review.
+- **Interactive architecture diagram.** `docs/architecture.html` (generated from `docs/architecture.archify.json`) maps the runtime flow with source references, guided views and theme switching; the README links it and embeds a light-theme capture.
+- **DeepSeek V4 Pro 0813** override in the model catalog (1M context, 384K max output).
+
+### Changed
+
+- **Maintenance stance documented.** README and `docs/contributing.md` now state that the project is as-is, with no support: issues and PRs may be read, ignored or closed without a reply, and forking (MIT) is the intended path. Security reports should put `security` in the title.
+- **The Pi catalog watch is homepi-only.** The daily drift check runs on homepi (systemd user timer `daily-pi-provider-sync.timer`) and publishes directly, so the GitHub Actions workflow no longer carries a `schedule` — a second automatic path would open duplicate PRs.
+- `.gitignore` ignores `.env` / `.env.*` (keeping `.env.example`), so real values are never committed; dotenvx-encrypted files are added explicitly.
+
+### Fixed
+
+- **Coverage no longer hides untested modules.** `jest.config.js` adds `src` to `roots` so Jest's haste map sees every `src/**/*.ts`; a module that no test imports is now reported at 0% instead of silently missing from the `collectCoverageFrom` report.
+- **Deterministic `Retry-After` test.** The API test freezes the client clock and sets the HTTP-date one second ahead, so the date branch no longer depends on sub-second timing (which flipped branch coverage between 74.57% and 75.75%); a second test covers an already-past date falling back to exponential backoff.
+- `docs/contributing.md` no longer lists a `tests/tool-repair.test.ts`: tool argument repair and dedup are covered by `tests/provider.test.ts`.
+
 ## [0.3.3] - 2026-08-26
 
 ### Added
