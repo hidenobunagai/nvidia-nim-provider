@@ -2,7 +2,11 @@
 module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
-  roots: ["<rootDir>/tests"],
+  // tests finds the suites; src lets Jest's haste map see src/**/*.ts so
+  // collectCoverageFrom can report a module no test imports yet at 0%, instead of
+  // silently leaving it out of the report (CoverageReporter._addUntestedFiles walks
+  // context.hasteFS, which `roots` scopes).
+  roots: ["<rootDir>/tests", "<rootDir>/src"],
   testMatch: ["**/*.test.ts"],
   moduleFileExtensions: ["ts", "js"],
   collectCoverageFrom: ["src/**/*.ts"],
