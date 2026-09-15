@@ -52,6 +52,11 @@ Test files live in `tests/` and mirror the `src/` structure:
 - `tests/tools.test.ts` — Language model tool registration
 - `tests/utils.test.ts` — Message conversion, tokenizer, reasoning cache
 - `tests/extension.test.ts` — Extension activation/deactivation
+- `tests/constants.test.ts` — Thinking-model allowlist and the models cache version
+- `tests/model-profile.test.ts` — Model-family request profiles and the unknown-model fallback
+- `tests/output-channel.test.ts` — Debug output channel and `NVIDIA_NIM_DEBUG` gating
+- `tests/status-bar.test.ts` — Status bar states (models/refreshing/error) and disposal
+- `tests/sync-from-pi.test.ts` — Pi catalog sync diffs, idempotence, and the ignored map
 
 ### Linting & Formatting
 
