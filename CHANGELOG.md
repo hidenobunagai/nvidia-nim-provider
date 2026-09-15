@@ -1,5 +1,15 @@
 # Change Log
 
+## [0.3.5] - 2026-09-16
+
+### Changed
+
+- **Coverage floor raised to the sibling-repo level.** `jest.config.js` now enforces 75% lines/statements/functions and 60% branches, up from a flat 50%. The measured suite reports 85.13% lines and 74.67% branches identically on ubuntu, macOS and Windows, so the old floor sat ~25–35pt below the real value and no longer caught regressions; the new one leaves 10.13pt of line and 14.67pt of branch headroom. The two paths left uncovered (`readWithTimeout`'s settled guard, the 1 MB buffer cap) are unreachable by test. `docs/contributing.md` documents the new thresholds.
+
+### Fixed
+
+- `docs/contributing.md` lists all 14 test suites again: the five that had gone unmentioned (`constants`, `model-profile`, `output-channel`, `status-bar`, `sync-from-pi`) are appended with a one-line description each, matching the enumerative style of the sibling `opencode-go-provider`.
+
 ## [0.3.4] - 2026-09-15
 
 ### Added
