@@ -130,7 +130,7 @@ nvidia-nim-provider/
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on Linux/macOS/Windows:
 1. **Compile** — TypeScript `tsc`
 2. **Lint** — ESLint
-3. **Test** — Jest with coverage (50% global threshold)
+3. **Test** — Jest with coverage (75% lines/statements/functions, 60% branches global threshold)
 
 Coverage reports are uploaded as artifacts on each CI run.
 
