@@ -1,5 +1,22 @@
 # Change Log
 
+## [0.3.6] - 2026-09-17
+
+### Added
+
+- **Docs inventories are now checked against the tree.** `tests/docs-inventories.test.ts` compares the three hand-written file lists — the test-suite list and project tree in `docs/contributing.md`, and the module table in `docs/architecture.md` — with what is actually on disk, so a module or suite added without its row fails CI instead of drifting silently (these lists have drifted twice already). Only membership is compared; what a row says about its module stays prose.
+
+### Changed
+
+- **Coverage now measures `scripts/`.** `jest.config.js` adds `scripts/` to both `roots` and `collectCoverageFrom`, because CI runs `bun run sync:pi`: the one file that command executes (`scripts/sync-from-pi.ts`, 52.33% lines) was the one file no coverage report named. The global floor is unchanged (75% lines/statements/functions, 60% branches); the merged report clears it at 83.19% lines and 73.59% branches.
+- **`bun run format` reformats `scripts/` too**, and the resulting Prettier changes are applied to `scripts/sync-from-pi.ts`. Also dropped that file's unused `#!/usr/bin/env bun` shebang — nothing executes it directly.
+- **CI actions moved to current majors.** `actions/checkout` v4 → v7 and `actions/upload-artifact` v4 → v7 in `ci.yml` and `publish.yml`; `peter-evans/create-pull-request` v6 → v8 in `sync-cron.yml`.
+- **The release docs describe the path that actually exists.** `docs/contributing.md` now documents the automated flow — commit, push, then `git tag vX.Y.Z` / `git push origin vX.Y.Z`, with `.github/workflows/publish.yml` compiling, packaging and publishing to the VS Code Marketplace (no GitHub release, and a manual run only validates the build) — instead of the removed manual `vsce publish` steps. It also marks `sync-from-pi.test.ts` and `docs-inventories.test.ts` as the suites covering `scripts/` and the docs rather than `src/`.
+
+### Fixed
+
+- `docs/architecture.md`'s module table was a file short of `src/`: added the `utils.ts` row for `<think>` block stripping (`filterThinkTagsFromChunk`, `flushThinkTagFilter`), including a tag split across two chunks.
+
 ## [0.3.5] - 2026-09-16
 
 ### Changed
