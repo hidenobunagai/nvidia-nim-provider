@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * Sync from Pi's nvidia.json to nvidia-nim-provider.
  * - Compares Pi's provider data (contextWindow/maxTokens/vision) with the
