@@ -41,6 +41,7 @@ Copilot Chat
 | `output-channel.ts` | Centralized debug logging via `vscode.OutputChannel`. |
 | `constants.ts` | API base URL, timeout values, context window safety margins, and thinking-model sets. |
 | `status-bar.ts` | Status bar item showing model count and refresh action. |
+| `utils.ts` | Strips `<think>` blocks out of streaming chunks (`filterThinkTagsFromChunk`, `flushThinkTagFilter`), including a tag split across two chunks. |
 
 ## Data Flow
 
