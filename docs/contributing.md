@@ -143,10 +143,15 @@ Coverage reports are uploaded as artifacts on each CI run.
 
 ## Release
 
+Publishing is automated by `.github/workflows/publish.yml`, which runs on any `v*` tag push:
+
 1. Update `version` in `package.json` and add a CHANGELOG entry.
 2. Commit and push to `main`.
-3. Create a GitHub release for the new version tag — the built VSIX is attached manually:
+3. Push the tag — the workflow compiles the extension, packages the VSIX and publishes it to the VS Code Marketplace:
+
    ```bash
-   bun run package:vsix
+   git tag v0.3.5
+   git push origin v0.3.5
    ```
-4. Publish to the VS Code Marketplace via `vsce publish`.
+
+A manual run of the workflow only validates the build; the publish step is gated on a tag ref. `bun run package:vsix` builds the same VSIX locally if you want to inspect it before tagging, and no GitHub release is involved in either path.
