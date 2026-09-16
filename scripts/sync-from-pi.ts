@@ -66,7 +66,14 @@ function findPiJsonLocal(): string | null {
   if (bun) {
     try {
       const proc = bun.spawnSync(
-        ["find", path.join(os.homedir(), ".bun"), "-name", "nvidia.json", "-path", "*pi-ai*dist/providers/data/nvidia.json"],
+        [
+          "find",
+          path.join(os.homedir(), ".bun"),
+          "-name",
+          "nvidia.json",
+          "-path",
+          "*pi-ai*dist/providers/data/nvidia.json",
+        ],
         { stdout: "pipe" },
       );
       const out = proc.stdout.toString().trim().split("\n").filter(Boolean);
@@ -106,7 +113,9 @@ function flattenPi(data: PiData): Map<string, PiModel> {
 }
 
 /** Parse the Record-style override table: `"id": { ... },` blocks. */
-function parseCatalogEntries(src: string): Map<string, { block: string; fields: Map<string, string> }> {
+function parseCatalogEntries(
+  src: string,
+): Map<string, { block: string; fields: Map<string, string> }> {
   const entries = new Map<string, { block: string; fields: Map<string, string> }>();
   const blockRegex = /("([^"]+)":\s*\{[\s\S]*?\n  \},?)/g;
   const fieldRegex = /(\w+):\s*([^,\n]+),/g;
@@ -124,7 +133,13 @@ function parseCatalogEntries(src: string): Map<string, { block: string; fields: 
 }
 
 // Canonical field order inside a block; insertions keep this grouping.
-const FIELD_ORDER = ["displayName", "contextWindow", "maxOutputTokens", "supportsVision", "supportsTools"];
+const FIELD_ORDER = [
+  "displayName",
+  "contextWindow",
+  "maxOutputTokens",
+  "supportsVision",
+  "supportsTools",
+];
 
 /** Replace `field: x,` if present, else insert after the previous canonical field's line. */
 function ensureField(block: string, field: string, value: string): string {
@@ -158,7 +173,10 @@ export function syncCatalog(
       continue;
     }
     let block = entry.block;
-    const expected: Record<"contextWindow" | "maxOutputTokens" | "supportsVision", number | boolean> = {
+    const expected: Record<
+      "contextWindow" | "maxOutputTokens" | "supportsVision",
+      number | boolean
+    > = {
       contextWindow: piModel.contextWindow,
       maxOutputTokens: piModel.maxTokens,
       supportsVision: piModel.input.includes("image"),
@@ -222,13 +240,17 @@ async function main() {
       fs.writeFileSync(catalogPath, out, "utf8");
       console.log(`\n✅ Applied ${changed} field updates to ${catalogPath}`);
       console.log("Next: bun run test && bun run lint && bun run compile");
-      console.log("Then: fix stale Notes in docs/models.md (deepseek 128K->1M, cosmos-reason2-8b, minimax-m3)");
+      console.log(
+        "Then: fix stale Notes in docs/models.md (deepseek 128K->1M, cosmos-reason2-8b, minimax-m3)",
+      );
     } else {
       console.log("\nRun with --write to apply: bun run sync:pi:write");
     }
   }
   if (piOnly.length > 0) {
-    console.log(`\nℹ️  In Pi but not in override (${piOnly.length}): ${verbose ? piOnly.join(", ") : "use --verbose to list"}`);
+    console.log(
+      `\nℹ️  In Pi but not in override (${piOnly.length}): ${verbose ? piOnly.join(", ") : "use --verbose to list"}`,
+    );
   }
   if (overrideOnly > 0) {
     console.log(`ℹ️  Override entries not in Pi (${overrideOnly}): left untouched`);
