@@ -41,7 +41,8 @@ bun run test -- --runInBand  # Run tests serially (recommended for CI)
 bun run test:coverage     # Run tests with coverage report
 ```
 
-Test files live in `tests/` and mirror the `src/` structure:
+Test files live in `tests/` and mostly mirror the `src/` structure (`sync-from-pi.test.ts` covers
+`scripts/`, `docs-inventories.test.ts` covers these docs):
 - `tests/api.test.ts` — API client, retry logic, and SSE streaming
 - `tests/provider.test.ts` — Provider lifecycle, model discovery, streaming, retry paths, and tool
   argument repair/dedup
