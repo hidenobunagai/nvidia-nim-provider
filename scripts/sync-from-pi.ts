@@ -102,11 +102,14 @@ async function loadPiData(): Promise<{ data: PiData; source: string }> {
   throw new Error("Could not locate Pi nvidia.json locally or via CDN");
 }
 
-function flattenPi(data: PiData): Map<string, PiModel> {
+export function flattenPi(data: PiData): Map<string, PiModel> {
   const map = new Map<string, PiModel>();
   for (const models of Object.values(data)) {
-    for (const [id, model] of Object.entries(models)) {
-      map.set(id, model);
+    for (const [key, model] of Object.entries(models)) {
+      // pi-ai's keys carry a kind prefix (`chat:deepseek-ai/deepseek-v4.1-flash`) while the
+      // override table writes the bare id. Keyed on the raw key every lookup missed, so the
+      // whole comparison was a silent no-op (measured 2026-10-04: 0 of 90 overrides matched).
+      map.set(model.id || key.replace(/^[a-z-]+:/, ""), model);
     }
   }
   return map;

@@ -1,4 +1,4 @@
-import { syncCatalog } from "../scripts/sync-from-pi";
+import { flattenPi, syncCatalog } from "../scripts/sync-from-pi";
 import type { PiModel } from "../scripts/sync-from-pi";
 
 function pi(id: string, ctx: number, max: number, vision: boolean): PiModel {
@@ -122,5 +122,29 @@ describe("syncCatalog", () => {
 
     expect(diffs).toEqual(["deepseek-ai/deepseek-v4-flash-0731: contextWindow 131072 -> 1000000"]);
     expect(changed).toBe(1);
+  });
+});
+
+describe("flattenPi", () => {
+  // Regression: pi-ai keys carry a kind prefix (`chat:…`) while the override table writes the
+  // bare id. Keyed on the raw key every override lookup missed and the gate compared nothing.
+  it("keys prefixed pi-ai entries by their bare model id", () => {
+    const map = flattenPi({
+      "openai-completions": {
+        "chat:deepseek-ai/deepseek-v4-flash-0731": {
+          id: "deepseek-ai/deepseek-v4-flash-0731",
+          name: "DeepSeek V4 Flash 0731",
+          api: "openai-completions",
+          provider: "nvidia",
+          baseUrl: "https://integrate.api.nvidia.com/v1",
+          reasoning: true,
+          input: ["text"],
+          contextWindow: 131072,
+          maxTokens: 131072,
+        },
+      },
+    });
+
+    expect([...map.keys()]).toEqual(["deepseek-ai/deepseek-v4-flash-0731"]);
   });
 });
