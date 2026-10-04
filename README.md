@@ -77,14 +77,14 @@ Press `F5` in VS Code to launch the Extension Development Host.
 
 ### Available Scripts
 
-- `bun run compile` – TypeScript コンパイル
-- `bun run watch` – ファイル変更監視付きコンパイル
-- `bun run test` – テスト実行
-- `bun run test:coverage` – カバレッジ付きテスト実行
-- `bun run lint` – ESLint チェック
-- `bun run lint:fix` – ESLint 自動修正
-- `bun run format` – Prettier フォーマット
-- `bun run package:vsix` – VSIX パッケージ作成
+- `bun run compile` – TypeScript compile
+- `bun run watch` – compile with file watching
+- `bun run test` – run tests
+- `bun run test:coverage` – run tests with coverage
+- `bun run lint` – ESLint check
+- `bun run lint:fix` – ESLint autofix
+- `bun run format` – Prettier format
+- `bun run package:vsix` – build the VSIX package
 
 ## Documentation
 
