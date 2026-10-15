@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { buildMissingToolCallNudge, looksLikeActionAnnouncement } from "../announcement";
 import { streamChatCompletion } from "../api";
 import { DEBUG_ENV_VAR, THINKING_MODELS } from "../constants";
+import { isAbortError } from "../errors";
 import { applyOpenAiSystemPromptGuidance } from "../guidance";
 import { convertMessages, convertTools, reasoningCache } from "../openai-conversion";
 import { captureLog, debugLog } from "../output-channel";
@@ -496,7 +497,7 @@ export async function processOpenAIStream(
       }
       return;
     } catch (err) {
-      if (token.isCancellationRequested || (err instanceof Error && err.name === "AbortError")) {
+      if (token.isCancellationRequested || isAbortError(err)) {
         throw new vscode.CancellationError();
       }
       throw err;

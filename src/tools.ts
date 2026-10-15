@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { PROVIDER_DISPLAY_NAME } from "./constants";
+import { errorMessage, isAbortError } from "./errors";
 import { NvidiaNimMcpClient } from "./mcp";
 
 /**
@@ -53,12 +54,11 @@ export class NvidiaNimAnalyzeImageTool implements vscode.LanguageModelTool<{
       const result = await this.mcpClient.analyzeImage(image_data, prompt, abortController.signal);
       return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(result)]);
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
+      if (isAbortError(error)) {
         throw new vscode.CancellationError();
       }
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
       return new vscode.LanguageModelToolResult([
-        new vscode.LanguageModelTextPart(`Failed to analyze image: ${errorMessage}`),
+        new vscode.LanguageModelTextPart(`Failed to analyze image: ${errorMessage(error)}`),
       ]);
     } finally {
       cancellationSubscription.dispose();

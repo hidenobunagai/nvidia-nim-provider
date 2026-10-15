@@ -491,4 +491,98 @@ describe("fetchWithRetry", () => {
       jest.useRealTimers();
     }
   });
+
+  // Regression: the abort reason is a DOMException, which does not extend Error under Jest
+  // (it does in production Node). Detecting the abort with `instanceof Error` therefore fails
+  // here, and an abort that lands on the final attempt — where no retry wait follows to carry
+  // the original reason back out — is rethrown as a generic error instead of a cancellation.
+  it("reports an abort as AbortError when it lands on the last attempt", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    expect(controller.signal.reason).not.toBeInstanceOf(Error);
+
+    global.fetch = jest.fn((_u, init) => Promise.reject(init?.signal?.reason));
+
+    const error = await fetchWithRetry(
+      "https://example.com",
+      { signal: controller.signal },
+      1,
+    ).catch((e) => e);
+
+    expect(error.name).toBe("AbortError");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports an abort as AbortError when no retry waits are left", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    global.fetch = jest.fn(() => Promise.reject(new Error("socket hang up")));
+
+    const error = await fetchWithRetry(
+      "https://example.com",
+      { signal: controller.signal },
+      1,
+    ).catch((e) => e);
+
+    expect(error.name).toBe("AbortError");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a cancellation when the abort lands mid-request as a network error", async () => {
+    jest.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      global.fetch = jest.fn(
+        () =>
+          new Promise((_r, reject) => {
+            // Abort while the request is in flight, but reject with a plain error as a transport
+            // failure would: the retry loop must still recognize the caller's cancellation.
+            setTimeout(() => {
+              controller.abort();
+              reject(new Error("socket hang up"));
+            }, 10);
+          }),
+      );
+
+      const error = await Promise.all([
+        fetchWithRetry("https://example.com", { signal: controller.signal }).catch((e) => e),
+        jest.advanceTimersByTimeAsync(20),
+      ]).then(([err]) => err);
+
+      expect(error.name).toBe("AbortError");
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // The request timeout fires while a retry is waiting out a 429: the wait now aborts instead of
+  // running to completion, so the caller sees the cancellation immediately.
+  it("aborts during the retry wait when the signal fires", async () => {
+    jest.useFakeTimers();
+    try {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: new Headers({ "retry-after": "30" }),
+      } as any);
+
+      const controller = new AbortController();
+      const p = fetchWithRetry("https://example.com", { signal: controller.signal }).catch(
+        (e) => e,
+      );
+
+      await jest.advanceTimersByTimeAsync(500);
+      controller.abort(new Error("caller stopped waiting"));
+
+      const error = await p;
+      expect(error.name).toBe("AbortError");
+      expect(error.message).toBe("caller stopped waiting");
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

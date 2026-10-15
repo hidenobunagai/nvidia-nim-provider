@@ -54,6 +54,7 @@ Test files live in `tests/` and mostly mirror the `src/` structure (`sync-from-p
 - `tests/utils.test.ts` — Message conversion, tokenizer, reasoning cache
 - `tests/extension.test.ts` — Extension activation/deactivation
 - `tests/constants.test.ts` — Thinking-model allowlist and the models cache version
+- `tests/errors.test.ts` — Abort/timeout classification by name, and error message extraction
 - `tests/model-profile.test.ts` — Model-family request profiles and the unknown-model fallback
 - `tests/output-channel.test.ts` — Debug output channel and `NVIDIA_NIM_DEBUG` gating
 - `tests/status-bar.test.ts` — Status bar states (models/refreshing/error) and disposal
@@ -125,6 +126,7 @@ nvidia-nim-provider/
 │   ├── guidance.ts           # System prompt guidance
 │   ├── output-channel.ts     # Debug logging
 │   ├── constants.ts          # Constants + workarounds
+│   ├── errors.ts             # Realm-safe error classification
 │   ├── status-bar.ts         # Status bar item
 │   └── utils.ts              # Re-export hub
 ├── tests/                    # Jest test files

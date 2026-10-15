@@ -31,6 +31,7 @@ import {
   normalizeNvidiaModels,
 } from "./model-catalog";
 import { getModelAdapter } from "./adapters";
+import { errorMessage, isAbortError } from "./errors";
 import { NvidiaNimMcpClient } from "./mcp";
 import { debugLog, outputLog } from "./output-channel";
 import { estimateMessagesTokens, estimateTokens } from "./tokenizer";
@@ -599,7 +600,7 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
             if (err instanceof vscode.CancellationError || token.isCancellationRequested) {
               throw err;
             }
-            const message = err instanceof Error ? err.message : String(err);
+            const message = errorMessage(err);
             const currentModel = this.getNormalizedModels().find((m) => m.id === model.id);
             const currentName = currentModel?.displayName ?? model.id;
             progress.report(
@@ -671,7 +672,7 @@ export class NvidiaNimChatModelProvider implements LanguageModelChatProvider {
         requestPreparationStartedAtMs,
       );
     } catch (err) {
-      if (token.isCancellationRequested || (err instanceof Error && err.name === "AbortError")) {
+      if (token.isCancellationRequested || isAbortError(err)) {
         throw new vscode.CancellationError();
       }
       throw err;
