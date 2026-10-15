@@ -1,5 +1,22 @@
 # Change Log
 
+## [0.3.7] - 2026-10-16
+
+### Fixed
+
+- **The 120s request timeout reached the user as a silent cancellation.** `streamChatCompletion` aborts its `timeoutController` when no response headers have arrived within `REQUEST_TIMEOUT_MS`, and it passed no reason, so `fetch` rejected with `AbortError`; `fetchWithRetry` rethrew it untouched and both `src/streaming/openai.ts` and `src/provider.ts` map any `AbortError` to `vscode.CancellationError`, which Copilot Chat renders as "you stopped this" with no message. A busy NIM backend therefore ended the chat with no explanation, indistinguishable from the stop button, while the mid-stream idle timeout already explained itself ("NVIDIA NIM streaming timeout: ...") — the same condition was reported or silent depending on when it happened. A timeout now throws a `TimeoutError` with `NVIDIA NIM request timeout: no response headers after 120s. The service may be overloaded.`, and a caller's own cancellation stays an `AbortError`.
+- **Retry waits ignored cancellation.** Both backoff waits in `fetchWithRetry` were a bare `setTimeout`, so a 429 carrying `Retry-After` (up to `MAX_RETRY_DELAY_MS` = 30s) left the stop button unresponsive for that whole window. A cancellable `sleep(ms, signal)` now rejects on abort, which also surfaces the request timeout immediately if it fires while a retry is waiting instead of after the wait completes.
+- **`bun run sync:pi` compared nothing.** `flattenPi` keyed its map on pi-ai's raw JSON key, which carries a kind prefix (`chat:deepseek-ai/deepseek-v4.1-flash`) while `KNOWN_MODEL_OVERRIDES` writes the bare id. Every lookup missed, so the gate reported all 90 overrides as "not in Pi" and could no longer detect drift (measured 2026-10-04). Keyed by `model.id` instead: 16 overrides compare and find no drift, and the remaining 74 are genuinely override-only entries.
+
+### Added
+
+- **Tests for the abort paths** (`tests/api.test.ts`, 21 tests in the suite, 267 in the project): a request timeout reports `TimeoutError` rather than `AbortError` and does not retry, a caller cancellation before the timeout stays an `AbortError`, and a 429 with `retry-after: 30` settles immediately with `AbortError` when aborted mid-wait. The file previously had no request-timeout or abort coverage at all.
+
+### Changed
+
+- **README translated to English**, matching the repository's English public artifacts.
+- **The README architecture diagram uses the archify PNG export** (`docs/architecture.png`) instead of a committed `visual-check` capture. The four `docs/architecture.visual-check.*` screenshots, the capture HTML/JSON and their `archify visual-check` receipts are dropped (579 lines), and `.gitignore` now ignores `*.visual-check.*` since the command regenerates them.
+
 ## [0.3.6] - 2026-09-17
 
 ### Added
