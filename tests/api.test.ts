@@ -1,5 +1,5 @@
-import { fetchModels, streamChatCompletion } from "../src/api";
-import { STREAM_IDLE_TIMEOUT_MS } from "../src/constants";
+import { fetchModels, fetchWithRetry, streamChatCompletion } from "../src/api";
+import { REQUEST_TIMEOUT_MS, STREAM_IDLE_TIMEOUT_MS } from "../src/constants";
 import { NvidiaModelSummary, NvidiaNimStreamResponse } from "../src/types";
 
 const rawModelSummaries: NvidiaModelSummary[] = [
@@ -406,6 +406,87 @@ describe("streamChatCompletion", () => {
 
       await rejection;
       expect(cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("reports a request timeout instead of AbortError when no headers arrive", async () => {
+    jest.useFakeTimers();
+    try {
+      global.fetch = jest.fn(
+        (_u, init) =>
+          new Promise((_r, reject) =>
+            init?.signal?.addEventListener("abort", () => reject(init?.signal?.reason)),
+          ),
+      );
+
+      const gen = streamChatCompletion("key", { model: "kimi-k2.6", messages: [], stream: true });
+      const p = gen.next().catch((e) => e);
+
+      await jest.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+
+      const error = await p;
+      expect(error.name).toBe("TimeoutError");
+      expect(error.message).toMatch(/request timeout/);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("keeps AbortError when the caller cancels before the timeout", async () => {
+    global.fetch = jest.fn(
+      (_u, init) =>
+        new Promise((_r, reject) =>
+          init?.signal?.addEventListener("abort", () => reject(init?.signal?.reason)),
+        ),
+    );
+
+    const controller = new AbortController();
+    const gen = streamChatCompletion(
+      "key",
+      { model: "kimi-k2.6", messages: [], stream: true },
+      controller.signal,
+    );
+    const p = gen.next().catch((e) => e);
+
+    controller.abort();
+
+    const error = await p;
+    expect(error.name).toBe("AbortError");
+  });
+});
+
+describe("fetchWithRetry", () => {
+  beforeEach(() => {
+    delete (globalThis as Record<string, unknown>).fetch;
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("stops waiting for Retry-After when the signal aborts", async () => {
+    jest.useFakeTimers();
+    try {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: new Headers({ "retry-after": "30" }),
+      } as any);
+
+      const controller = new AbortController();
+      const p = fetchWithRetry("https://example.com", { signal: controller.signal }).catch(
+        (e) => e,
+      );
+
+      await jest.advanceTimersByTimeAsync(1000);
+      controller.abort();
+
+      const error = await p;
+      expect(error.name).toBe("AbortError");
+      expect(fetch).toHaveBeenCalledTimes(1);
     } finally {
       jest.useRealTimers();
     }
