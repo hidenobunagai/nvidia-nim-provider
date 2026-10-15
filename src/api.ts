@@ -7,6 +7,7 @@ import {
   STREAM_IDLE_TIMEOUT_MIN_MS,
   STREAM_IDLE_TIMEOUT_MS,
 } from "./constants";
+import { abortReasonOf, isAbortError, isTimeoutError, TIMEOUT_ERROR_NAME, toError } from "./errors";
 import { debugLog } from "./output-channel";
 import {
   NvidiaModelListResponse,
@@ -64,18 +65,22 @@ function calculateRetryDelay(attempt: number, retryAfter?: number): number {
 
 function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
   return new Promise((resolve, reject) => {
+    // Already cancelled: reject without scheduling a timer that would only be cleared again.
+    // `signal.reason` may be undefined (abort() with no argument), so the rejection is built to
+    // keep a named AbortError either way — callers branch on the name to tell cancellation from
+    // failure.
     if (signal?.aborted) {
-      reject(signal.reason);
+      reject(abortReasonOf(signal));
       return;
     }
+    const onAbort = () => {
+      clearTimeout(id);
+      reject(abortReasonOf(signal));
+    };
     const id = setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);
       resolve();
     }, ms);
-    const onAbort = () => {
-      clearTimeout(id);
-      reject(signal?.reason);
-    };
     signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
@@ -103,9 +108,15 @@ export async function fetchWithRetry(
         await sleep(delay, init.signal);
       }
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      if (lastError.name === "AbortError") {
+      lastError = toError(error);
+      // Stop on cancellation. It arrives either as the rejection itself or, when an abort races
+      // the fetch, as a plain network error — both mean the caller cancelled, and the error must
+      // stay recognizable as a cancellation downstream (it decides between "stopped" and "failed").
+      if (isAbortError(lastError)) {
         throw lastError;
+      }
+      if (init.signal?.aborted) {
+        throw abortReasonOf(init.signal);
       }
       if (i < retries - 1) {
         const delay = calculateRetryDelay(i);
@@ -141,7 +152,7 @@ export async function fetchModels(
     const data = (await response.json()) as NvidiaModelListResponse;
     return Array.isArray(data.data) ? data.data : null;
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
+    if (isAbortError(error)) {
       throw error;
     }
     debugLog("fetchModels", error);
@@ -182,7 +193,7 @@ export async function* streamChatCompletion(
       const timeoutError = new Error(
         `NVIDIA NIM request timeout: no response headers after ${REQUEST_TIMEOUT_MS / 1000}s. The service may be overloaded.`,
       );
-      timeoutError.name = "TimeoutError";
+      timeoutError.name = TIMEOUT_ERROR_NAME;
       throw timeoutError;
     }
     throw error;
@@ -243,7 +254,7 @@ export async function* streamChatCompletion(
       const idleTimeoutId = setTimeout(() => {
         const idleSec = Math.round((Date.now() - lastChunkTime) / 1000);
         const err = new Error(`Stream idle timeout: no data for ${idleSec}s`);
-        err.name = "TimeoutError";
+        err.name = TIMEOUT_ERROR_NAME;
         void reader.cancel(err).catch(() => undefined);
         rejectOnce(err);
       }, idleTimeoutMs);
@@ -306,7 +317,7 @@ export async function* streamChatCompletion(
       }
     }
   } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") {
+    if (isTimeoutError(error)) {
       const idleSec = Math.round((Date.now() - lastChunkTime) / 1000);
       throw new Error(
         `NVIDIA NIM streaming timeout: no data received for ${idleSec}s. The model may be stalled.`,

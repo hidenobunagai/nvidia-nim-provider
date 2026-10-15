@@ -18,6 +18,7 @@ import {
   TOGGLE_DEBUG_LOGGING_COMMAND_ID,
   TOGGLE_SHOW_REASONING_COMMAND_ID,
 } from "./constants";
+import { errorMessage } from "./errors";
 import { normalizeNvidiaModels } from "./model-catalog";
 import { debugLog, disposeOutputChannel, getOutputChannel, outputLog } from "./output-channel";
 import { NvidiaNimChatModelProvider } from "./provider";
@@ -40,7 +41,7 @@ async function migrateLanguageModelProviderGroup(apiKey: string): Promise<boolea
     );
     return true;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     outputLog(
       "languageModelGroup",
       `Could not configure VS Code language model group automatically: ${message}`,
@@ -98,7 +99,7 @@ async function refreshModelsFromApi(
             } catch (rollbackError) {
               debugLog(
                 "refreshModels",
-                `Raw cache rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+                `Raw cache rollback failed: ${errorMessage(rollbackError)}`,
               );
             }
             throw normalizedWriteError;
@@ -126,15 +127,10 @@ async function refreshModelsFromApi(
           );
         }
       } catch (error) {
-        debugLog(
-          "refreshModels",
-          `Model refresh failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        statusBar.showError(error instanceof Error ? error.message : String(error));
+        debugLog("refreshModels", `Model refresh failed: ${errorMessage(error)}`);
+        statusBar.showError(errorMessage(error));
         if (options.showMessages) {
-          vscode.window.showErrorMessage(
-            `Failed to refresh models: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          vscode.window.showErrorMessage(`Failed to refresh models: ${errorMessage(error)}`);
         }
       }
     });
