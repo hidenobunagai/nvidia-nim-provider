@@ -1,5 +1,20 @@
 # Change Log
 
+## [0.3.8] - 2026-10-16
+
+### Fixed
+
+- **Cancellations were detected with a realm-dependent guard, so an aborted request was retried and reported as a failure.** The check was `error instanceof Error && error.name === "AbortError"`, but `instanceof` behaves differently by realm: Node's `DOMException` extends `Error`, while the one Jest's node environment installs does not (measured on Node 22, `Error.prototype.isPrototypeOf(DOMException.prototype)` is `true` in plain Node and `false` under Jest). The same abort therefore passed the guard in production and failed it under test. In `fetchWithRetry` an cancelled request was treated as a network failure and retried; once the retries were exhausted the abort was rethrown as a generic `Error`, so `provider.ts` and `streaming/openai.ts` no longer recognized it as a cancellation and the stop button stopped meaning "stopped". Classification is now by `name` alone (`src/errors.ts`), so an abort is recognized identically in both realms.
+
+### Added
+
+- **`src/errors.ts`** — realm-safe error classification and normalization: `isAbortError`, `isTimeoutError`, `errorMessage`, `abortError`, `abortReasonOf`, `toError`. Every abort/timeout decision point uses it now (`api.ts`, `provider.ts`, `streaming/openai.ts`, `tools.ts`, `extension.ts`), and `errorMessage()` recovers messages from `DOMException` where the previous inline conversions stringified them. `TIMEOUT_ERROR_NAME` replaces the two inline `"TimeoutError"` literals so the thrower and the catcher cannot drift apart.
+- **Tests for the abort paths** (`tests/errors.test.ts`, plus three `fetchWithRetry` cases in `tests/api.test.ts`): 16 suites, 278 tests. The three `fetchWithRetry` tests assert the abort stays recognizable when it lands on the last attempt, when no retry waits are left (previous behaviour: `"Error"`), and when the request timeout fires while a retry is waiting out a 429 (previous behaviour: `"Error"`, and the 30s wait ran to completion). `tests/errors.test.ts` pins the realm asymmetry itself — it asserts `signal.reason` is not an `instanceof Error` under Jest, which is what broke the old guard.
+
+### Changed
+
+- **`fetchWithRetry` stops on cancellation in two cases it previously missed**: when the signal is aborted even though the rejection looked like a transport failure, and when the signal carries no reason (`abort()` with no argument leaves `reason` undefined) — it throws a named `AbortError` instead of an unidentifiable value. `sleep` no longer schedules a timer when the signal is already aborted.
+
 ## [0.3.7] - 2026-10-16
 
 ### Fixed
