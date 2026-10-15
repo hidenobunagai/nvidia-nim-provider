@@ -62,6 +62,24 @@ function calculateRetryDelay(attempt: number, retryAfter?: number): number {
   return Math.round(Math.random() * cappedDelay);
 }
 
+function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const id = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(id);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 export async function fetchWithRetry(
   url: string,
   init: RequestInit,
@@ -82,7 +100,7 @@ export async function fetchWithRetry(
           "fetchWithRetry",
           `Attempt ${i + 1} failed with ${response.status}, retrying after ${delay}ms`,
         );
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await sleep(delay, init.signal);
       }
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -95,7 +113,7 @@ export async function fetchWithRetry(
           "fetchWithRetry",
           `Attempt ${i + 1} failed with network error, retrying after ${delay}ms`,
         );
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await sleep(delay, init.signal);
       }
     }
   }
@@ -147,16 +165,28 @@ export async function* streamChatCompletion(
     ? AbortSignal.any([signal, timeoutController.signal])
     : timeoutController.signal;
 
-  const response = await fetchWithRetry(`${BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      ...(userAgent ? { "User-Agent": userAgent } : {}),
-    },
-    body: JSON.stringify(requestBody),
-    signal: combinedSignal,
-  }).finally(() => clearTimeout(timeoutId));
+  let response: Response;
+  try {
+    response = await fetchWithRetry(`${BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        ...(userAgent ? { "User-Agent": userAgent } : {}),
+      },
+      body: JSON.stringify(requestBody),
+      signal: combinedSignal,
+    }).finally(() => clearTimeout(timeoutId));
+  } catch (error) {
+    if (timeoutController.signal.aborted && !signal?.aborted) {
+      const timeoutError = new Error(
+        `NVIDIA NIM request timeout: no response headers after ${REQUEST_TIMEOUT_MS / 1000}s. The service may be overloaded.`,
+      );
+      timeoutError.name = "TimeoutError";
+      throw timeoutError;
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const text = await response.text();
