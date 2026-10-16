@@ -59,6 +59,7 @@ Test files live in `tests/` and mostly mirror the `src/` structure (`sync-from-p
 - `tests/output-channel.test.ts` — Debug output channel and `NVIDIA_NIM_DEBUG` gating
 - `tests/status-bar.test.ts` — Status bar states (models/refreshing/error) and disposal
 - `tests/sync-from-pi.test.ts` — Pi catalog sync diffs, idempotence, and the ignored map
+- `tests/pi-ai-source.test.ts` — Where the Pi catalog gate reads pi-ai from: latest on npm, newest local copy offline
 - `tests/docs-inventories.test.ts` — Holds the hand-written file lists in this doc and `architecture.md` to what is on disk
 
 ### Linting & Formatting

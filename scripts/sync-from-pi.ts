@@ -5,10 +5,8 @@
  * - Default: --check (report diff, exit 1 on drift). With --write, updates
  *   src/model-catalog.ts.
  *
- * Pi source resolution:
- *  1) Local pi-ai install (global bun)
- *  2) `find` over ~/.bun caches (bun-only, guarded)
- *  3) Fallback fetch from jsdelivr/unpkg
+ * Pi source: the latest published pi-ai from npm/CDN, falling back to the newest local
+ * copy when offline (see scripts/pi-ai-source.ts).
  *
  * Usage:
  *   bun scripts/sync-from-pi.ts            # check
@@ -21,7 +19,7 @@
  */
 import fs from "fs";
 import path from "path";
-import os from "os";
+import { loadPiAiData } from "./pi-ai-source";
 
 export type PiModel = {
   id: string;
@@ -51,56 +49,6 @@ const IGNORED: Record<string, string[]> = {
   // Pi says 128K, but NVIDIA documents 256K for Cosmos Reason2 8B.
   "nvidia/cosmos-reason2-8b": ["contextWindow"],
 };
-
-function findPiJsonLocal(): string | null {
-  const globalPath = path.join(
-    os.homedir(),
-    ".bun/install/global/node_modules/@earendil-works/pi-ai/dist/providers/data/nvidia.json",
-  );
-  if (fs.existsSync(globalPath) && fs.statSync(globalPath).isFile()) return globalPath;
-  // Fallback: locate nvidia.json inside bun caches (bun-only API; never runs under jest)
-  const bunGlobal = globalThis as {
-    Bun?: { spawnSync: (cmd: string[], opts: { stdout: "pipe" }) => { stdout: Buffer } };
-  };
-  const bun = bunGlobal.Bun;
-  if (bun) {
-    try {
-      const proc = bun.spawnSync(
-        [
-          "find",
-          path.join(os.homedir(), ".bun"),
-          "-name",
-          "nvidia.json",
-          "-path",
-          "*pi-ai*dist/providers/data/nvidia.json",
-        ],
-        { stdout: "pipe" },
-      );
-      const out = proc.stdout.toString().trim().split("\n").filter(Boolean);
-      if (out.length > 0) return out.sort((a, b) => a.length - b.length)[0];
-    } catch {}
-  }
-  return null;
-}
-
-async function loadPiData(): Promise<{ data: PiData; source: string }> {
-  const local = findPiJsonLocal();
-  if (local) {
-    console.log(`Found Pi JSON locally: ${local}`);
-    return { data: JSON.parse(fs.readFileSync(local, "utf8")) as PiData, source: local };
-  }
-  const urls = [
-    "https://cdn.jsdelivr.net/npm/@earendil-works/pi-ai/dist/providers/data/nvidia.json",
-    "https://unpkg.com/@earendil-works/pi-ai/dist/providers/data/nvidia.json",
-  ];
-  for (const url of urls) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) return { data: (await res.json()) as PiData, source: url };
-    } catch {}
-  }
-  throw new Error("Could not locate Pi nvidia.json locally or via CDN");
-}
 
 export function flattenPi(data: PiData): Map<string, PiModel> {
   const map = new Map<string, PiModel>();
@@ -222,7 +170,7 @@ async function main() {
   const catalogPath = path.resolve(path.dirname(process.argv[1]), "../src/model-catalog.ts");
 
   console.log(`🔍 Sync from Pi — ${write ? "WRITE" : "CHECK"} mode`);
-  const { data, source } = await loadPiData();
+  const { data, source } = await loadPiAiData<PiData>("nvidia.json");
   console.log(`Source: ${source}`);
   const piMap = flattenPi(data);
   console.log(`Pi models: ${piMap.size}`);
