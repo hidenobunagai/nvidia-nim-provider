@@ -7,8 +7,10 @@
  * Resolution:
  *  1) The npm registry's `latest` pi-ai version, fetched pinned to that version from
  *     jsdelivr, then unpkg. Pinning matters: the CDNs cache unversioned URLs for days.
- *  2) Offline: the newest local copy (global bun install or bun cache) by package.json
- *     version, with a warning, since a local copy can lag the published one.
+ *  2) Registry unreachable: the newest local copy (global bun install or bun cache) by
+ *     package.json version, with a warning, since a local copy can lag the published one.
+ *     When the registry did answer but no CDN serves that version, only a local copy of
+ *     exactly that version is used; otherwise this throws rather than compare stale data.
  *
  * No module-scope side effects and no Bun / import.meta, so jest can import it.
  */
@@ -51,13 +53,23 @@ export function compareVersions(a: string, b: string): number {
   if (x.pre === y.pre) return 0;
   if (!x.pre) return 1;
   if (!y.pre) return -1;
-  return x.pre < y.pre ? -1 : 1;
+  const xs = x.pre.split(".");
+  const ys = y.pre.split(".");
+  for (let i = 0; i < Math.min(xs.length, ys.length); i++) {
+    if (xs[i] === ys[i]) continue;
+    const numeric = /^\d+$/.test(xs[i]) && /^\d+$/.test(ys[i]);
+    if (numeric) return Math.sign(Number(xs[i]) - Number(ys[i]));
+    return xs[i] < ys[i] ? -1 : 1;
+  }
+  return Math.sign(xs.length - ys.length);
 }
 
 /** The global bun install plus every pi-ai copy in the bun cache. */
-export function defaultPiAiDirs(home = os.homedir()): string[] {
-  const dirs = [path.join(home, ".bun/install/global/node_modules", PKG)];
-  const cache = path.join(home, ".bun/install/cache/@earendil-works");
+export function defaultPiAiDirs(
+  bunRoot = process.env.BUN_INSTALL || path.join(os.homedir(), ".bun"),
+): string[] {
+  const dirs = [path.join(bunRoot, "install/global/node_modules", PKG)];
+  const cache = path.join(bunRoot, "install/cache/@earendil-works");
   try {
     for (const e of fs.readdirSync(cache)) {
       if (e.startsWith("pi-ai@")) dirs.push(path.join(cache, e));
@@ -125,12 +137,12 @@ export async function loadPiAiData<T>(
 
   const local = newestLocal(file, opts.dirs ?? defaultPiAiDirs());
   if (!local) throw new Error(`Could not load pi-ai ${file} from npm/CDN or a local install`);
-  const note =
-    latest === null
-      ? "latest unknown"
-      : local.version === latest
-        ? "latest"
-        : `latest is ${latest} — comparing against stale data`;
+  if (latest !== null && local.version !== latest) {
+    throw new Error(
+      `pi-ai ${latest} is published but no CDN served ${file}; refusing to compare against local ${local.version}`,
+    );
+  }
+  const note = latest === null ? "latest unknown" : "latest";
   warn(`using local pi-ai ${local.version} (${note})`);
   return {
     data: JSON.parse(fs.readFileSync(local.path, "utf8")) as T,

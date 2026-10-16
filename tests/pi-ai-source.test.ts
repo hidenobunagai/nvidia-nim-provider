@@ -25,8 +25,10 @@ function fakeFetch(routes: Record<string, unknown>): { fetch: typeof fetch; urls
 
 describe("compareVersions", () => {
   it("orders numerically, with prereleases before their release", () => {
-    const sorted = ["1.10.0", "1.3.0", "1.3.0-beta.1", "0.99.2", "1.2.0"].sort(compareVersions);
-    expect(sorted).toEqual(["0.99.2", "1.2.0", "1.3.0-beta.1", "1.3.0", "1.10.0"]);
+    const sorted = ["1.10.0", "1.3.0", "1.3.0-beta.10", "0.99.2", "1.3.0-beta.9", "1.2.0"].sort(
+      compareVersions,
+    );
+    expect(sorted).toEqual(["0.99.2", "1.2.0", "1.3.0-beta.9", "1.3.0-beta.10", "1.3.0", "1.10.0"]);
   });
 });
 
@@ -62,19 +64,22 @@ describe("newestLocal / loadPiAiData", () => {
     expect(urls).toHaveLength(2);
   });
 
-  it("falls back to unpkg, then to the newest local copy with a warning", async () => {
-    const dirs = [piAiDir(root, "1.1.0", { v: "old" }), piAiDir(root, "1.2.0", { v: "new" })];
-    const warnings: string[] = [];
-    const { fetch, urls } = fakeFetch({
+  it("falls back to unpkg, then to a local copy only if it is the latest version", async () => {
+    const registry = {
       "https://registry.npmjs.org/@earendil-works/pi-ai/latest": { version: "1.3.0" },
-    });
-    const res = await loadPiAiData("x.json", { fetch, dirs, warn: (m) => warnings.push(m) });
+    };
+    const { fetch, urls } = fakeFetch(registry);
+    const stale = [piAiDir(root, "1.2.0", { v: "stale" })];
+    await expect(loadPiAiData("x.json", { fetch, dirs: stale, warn: () => {} })).rejects.toThrow(
+      "refusing to compare against local 1.2.0",
+    );
     expect(urls[2]).toBe(
       "https://unpkg.com/@earendil-works/pi-ai@1.3.0/dist/providers/data/x.json",
     );
-    expect(res.data).toEqual({ v: "new" });
-    expect(res.source).toContain("pi-ai 1.2.0, local fallback, latest is 1.3.0");
-    expect(warnings[warnings.length - 1]).toContain("stale");
+    const current = [...stale, piAiDir(root, "1.3.0", { v: "current" })];
+    const res = await loadPiAiData("x.json", { fetch, dirs: current, warn: () => {} });
+    expect(res.data).toEqual({ v: "current" });
+    expect(res.source).toContain("pi-ai 1.3.0, local fallback, latest");
   });
 
   it("uses the newest local copy when the registry is unreachable, and throws with none", async () => {
