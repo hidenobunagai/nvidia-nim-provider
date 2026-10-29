@@ -1,0 +1,3 @@
+# Path prefixes the format gate skips (see scripts/format-check.sh).
+dist/
+tests/fixtures/
