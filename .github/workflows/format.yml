@@ -1,0 +1,48 @@
+name: Format
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install uv (for Ruff and ty)
+        uses: astral-sh/setup-uv@v5
+      - name: Install Python tools
+        run: |
+          uv tool install ruff==0.17.3
+          uv tool install ty==0.0.94
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install JS and SQL tools
+        run: |
+          bun add -g oxfmt@0.75.0 oxlint@1.90.0 sql-template-formatter@0.0.18 inline-sql-toolkit@0.5.4
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Collect changed files
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            git ls-files > changed.txt
+          else
+            git diff --name-only "$base" HEAD > changed.txt
+          fi
+          cat changed.txt
+      - name: Run format check on changed files
+        run: |
+          if [ -s changed.txt ]; then
+            xargs -a changed.txt scripts/format-check.sh
+          fi
