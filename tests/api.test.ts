@@ -456,6 +456,125 @@ describe("streamChatCompletion", () => {
     const error = await p;
     expect(error.name).toBe("AbortError");
   });
+
+  it("rejects with an explicit error and cancels reader when an incomplete SSE line exceeds 1 MB", async () => {
+    const encoder = new TextEncoder();
+    const cancelSpy = jest.fn().mockResolvedValue(undefined);
+    const largeIncomplete = "data: " + "a".repeat(1024 * 1024 + 16);
+    const mockReader = {
+      read: jest
+        .fn()
+        .mockResolvedValueOnce({ done: false, value: encoder.encode(largeIncomplete) }),
+      cancel: cancelSpy,
+      releaseLock: jest.fn(),
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      body: { getReader: () => mockReader },
+    } as any);
+
+    const gen = streamChatCompletion("key", { model: "kimi-k2.6", messages: [], stream: true });
+    await expect(gen.next()).rejects.toThrow(
+      "NVIDIA NIM streaming error: SSE line exceeded the 1 MB buffer limit",
+    );
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("yields preceding complete lines before failing when a subsequent incomplete line exceeds 1 MB", async () => {
+    const encoder = new TextEncoder();
+    const chunk: NvidiaNimStreamResponse = {
+      id: "1",
+      object: "chat.completion.chunk",
+      created: 1,
+      model: "kimi-k2.6",
+      choices: [{ index: 0, delta: { content: "prior complete chunk" }, finish_reason: null }],
+    };
+    const validLine = `data: ${JSON.stringify(chunk)}\n\n`;
+    const largeIncomplete = "data: " + "b".repeat(1024 * 1024 + 32);
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(validLine));
+        controller.enqueue(encoder.encode(largeIncomplete));
+        controller.close();
+      },
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      body: stream,
+    } as any);
+
+    const gen = streamChatCompletion("key", { model: "kimi-k2.6", messages: [], stream: true });
+
+    const first = await gen.next();
+    expect(first.done).toBe(false);
+    expect(first.value?.choices[0].delta.content).toBe("prior complete chunk");
+
+    await expect(gen.next()).rejects.toThrow(
+      "NVIDIA NIM streaming error: SSE line exceeded the 1 MB buffer limit",
+    );
+  });
+
+  it("yields a complete valid data line that exceeds 1 MB without discarding it", async () => {
+    const encoder = new TextEncoder();
+    const largeContent = "c".repeat(1024 * 1024 + 64);
+    const chunk: NvidiaNimStreamResponse = {
+      id: "1",
+      object: "chat.completion.chunk",
+      created: 1,
+      model: "kimi-k2.6",
+      choices: [{ index: 0, delta: { content: largeContent }, finish_reason: null }],
+    };
+    const largeValidLine = `data: ${JSON.stringify(chunk)}\n\n`;
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(largeValidLine));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      body: stream,
+    } as any);
+
+    const gen = streamChatCompletion("key", { model: "kimi-k2.6", messages: [], stream: true });
+    const results: NvidiaNimStreamResponse[] = [];
+    for await (const item of gen) {
+      results.push(item);
+    }
+
+    expect(results).toHaveLength(1);
+    expect(results[0].choices[0].delta.content).toBe(largeContent);
+  });
+
+  it("accumulates incomplete line across chunks and throws when accumulated buffer exceeds 1 MB", async () => {
+    const encoder = new TextEncoder();
+    const chunk1 = "data: " + "d".repeat(600 * 1024);
+    const chunk2 = "d".repeat(600 * 1024);
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(chunk1));
+        controller.enqueue(encoder.encode(chunk2));
+        controller.close();
+      },
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      body: stream,
+    } as any);
+
+    const gen = streamChatCompletion("key", { model: "kimi-k2.6", messages: [], stream: true });
+    await expect(gen.next()).rejects.toThrow(
+      "NVIDIA NIM streaming error: SSE line exceeded the 1 MB buffer limit",
+    );
+  });
 });
 
 describe("fetchWithRetry", () => {
