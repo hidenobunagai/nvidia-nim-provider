@@ -163,6 +163,19 @@ export async function fetchModels(
 /** 1 MB safety cap on the line assembly buffer. */
 const MAX_SSE_BUFFER_SIZE = 1024 * 1024;
 
+function parseSseLine(line: string): NvidiaNimStreamResponse | undefined {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("data: ")) return undefined;
+  const data = trimmed.slice(6);
+  if (data === "[DONE]") return undefined;
+  try {
+    return JSON.parse(data) as NvidiaNimStreamResponse;
+  } catch {
+    // Ignore malformed lines
+    return undefined;
+  }
+}
+
 export async function* streamChatCompletion(
   apiKey: string,
   requestBody: NvidiaNimChatRequest,
@@ -278,25 +291,23 @@ export async function* streamChatCompletion(
       lastChunkTime = Date.now();
 
       const text = decoder.decode(value, { stream: true });
-      if (buffer.length + text.length > MAX_SSE_BUFFER_SIZE) {
-        debugLog("streamChatCompletion", "SSE buffer exceeded 1 MB — flushing");
-        buffer = "";
-      }
       buffer += text;
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
-        const data = trimmed.slice(6);
-        if (data === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(data) as NvidiaNimStreamResponse;
+        const parsed = parseSseLine(line);
+        if (parsed !== undefined) {
           yield parsed;
-        } catch {
-          // Ignore malformed lines
         }
+      }
+
+      if (buffer.length > MAX_SSE_BUFFER_SIZE) {
+        const err = new Error(
+          "NVIDIA NIM streaming error: SSE line exceeded the 1 MB buffer limit",
+        );
+        void reader.cancel(err).catch(() => undefined);
+        throw err;
       }
     }
 
@@ -305,15 +316,9 @@ export async function* streamChatCompletion(
     buffer += remaining;
     const finalLines = buffer.split("\n");
     for (const line of finalLines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data: ")) continue;
-      const data = trimmed.slice(6);
-      if (data === "[DONE]") continue;
-      try {
-        const parsed = JSON.parse(data) as NvidiaNimStreamResponse;
+      const parsed = parseSseLine(line);
+      if (parsed !== undefined) {
         yield parsed;
-      } catch {
-        // Ignore malformed lines
       }
     }
   } catch (error) {
